@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Login() {
-  const { loginAsDemo } = useAuth();
+  const { loginAsDemo, switchRole } = useAuth();
   const [loginPortal, setLoginPortal] = useState<'student' | 'staff' | 'admin'>('student');
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
@@ -53,6 +53,7 @@ export default function Login() {
         setError(`Success! Changed your account role to "${repairRole === 'staff' ? 'Staff/Teacher' : 'Student'}". Accessing your dashboard...`);
         setShowRoleRepair(false);
         setTimeout(() => {
+          switchRole(repairRole);
           navigate('/dashboard');
         }, 1500);
       }
@@ -257,6 +258,7 @@ export default function Login() {
 
           // Final Check: Navigate if profile exists (either fetched or healed fallback)
           if (profile) {
+            switchRole(loginPortal);
             navigate('/dashboard');
           } else if (!error) {
             await supabase.auth.signOut();

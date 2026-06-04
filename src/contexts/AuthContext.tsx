@@ -43,13 +43,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginAsDemo = (email: string, role: 'admin' | 'staff' | 'student', fullName: string) => {
+    localStorage.setItem('ff_admin_active_role', role);
+    setActiveRoleOverride(role);
+
     const demoId = `demo-${role}-id-9999`;
     const mockUser = {
       id: demoId,
       email: email,
       created_at: new Date().toISOString(),
       app_metadata: {},
-      user_metadata: { full_name: fullName },
+      user_metadata: { full_name: fullName, role: role },
       aud: 'authenticated',
       role: 'authenticated'
     } as any as User;
@@ -73,9 +76,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logoutDemo = () => {
     localStorage.removeItem('faith_foundation_sandbox_session');
+    localStorage.removeItem('ff_admin_active_role');
     setUser(null);
     setProfile(null);
     setIsSandbox(false);
+    setActiveRoleOverride(null);
   };
 
   useEffect(() => {
@@ -83,9 +88,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const originalSignOut = supabase.auth.signOut.bind(supabase.auth);
     supabase.auth.signOut = async (...args) => {
       localStorage.removeItem('faith_foundation_sandbox_session');
+      localStorage.removeItem('ff_admin_active_role');
       setUser(null);
       setProfile(null);
       setIsSandbox(false);
+      setActiveRoleOverride(null);
       try {
         return await originalSignOut(...args);
       } catch (e) {

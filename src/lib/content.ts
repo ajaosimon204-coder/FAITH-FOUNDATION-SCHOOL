@@ -116,7 +116,28 @@ const DEFAULT_CONTENT: SiteContent = {
 };
 
 export const useContent = () => {
-  const [content, setContent] = useState<SiteContent>(DEFAULT_CONTENT);
+  const [content, setContent] = useState<SiteContent>(() => {
+    const savedSandboxContent = localStorage.getItem('faith_foundation_sandbox_content');
+    if (savedSandboxContent) {
+      try {
+        const parsed = JSON.parse(savedSandboxContent);
+        return {
+          ...DEFAULT_CONTENT,
+          ...parsed,
+          branding: { ...DEFAULT_CONTENT.branding, ...(parsed.branding || {}) },
+          hero: { ...DEFAULT_CONTENT.hero, ...(parsed.hero || {}) },
+          alumni: { ...DEFAULT_CONTENT.alumni, ...(parsed.alumni || {}) },
+          philosophy: { ...DEFAULT_CONTENT.philosophy, ...(parsed.philosophy || {}) },
+          highlights: { ...DEFAULT_CONTENT.highlights, ...(parsed.highlights || {}) },
+          cta: { ...DEFAULT_CONTENT.cta, ...(parsed.cta || {}) },
+          contact: { ...DEFAULT_CONTENT.contact, ...(parsed.contact || {}) },
+        };
+      } catch (e) {
+        console.error('Failed to parse initial saved sandbox content:', e);
+      }
+    }
+    return DEFAULT_CONTENT;
+  });
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
   const [dbSetupMissing, setDbSetupMissing] = useState(false);
@@ -167,19 +188,26 @@ export const useContent = () => {
           }
         } else if (data?.content) {
           const fetched = data.content as Partial<SiteContent>;
-          setContent(prev => ({
-            ...prev,
+          const merged: SiteContent = {
+            ...DEFAULT_CONTENT,
             ...fetched,
-            branding: { ...prev.branding, ...(fetched.branding || {}) },
-            hero: { ...prev.hero, ...(fetched.hero || {}) },
-            alumni: { ...prev.alumni, ...(fetched.alumni || {}) },
-            philosophy: { ...prev.philosophy, ...(fetched.philosophy || {}) },
-            highlights: { ...prev.highlights, ...(fetched.highlights || {}) },
-            cta: { ...prev.cta, ...(fetched.cta || {}) },
-            contact: { ...prev.contact, ...(fetched.contact || {}) },
-            stats: Array.isArray(fetched.stats) ? fetched.stats : prev.stats,
-            gallery: Array.isArray(fetched.gallery) ? fetched.gallery : prev.gallery,
-          }));
+            branding: { ...DEFAULT_CONTENT.branding, ...(fetched.branding || {}) },
+            hero: { ...DEFAULT_CONTENT.hero, ...(fetched.hero || {}) },
+            alumni: { ...DEFAULT_CONTENT.alumni, ...(fetched.alumni || {}) },
+            philosophy: { ...DEFAULT_CONTENT.philosophy, ...(fetched.philosophy || {}) },
+            highlights: { ...DEFAULT_CONTENT.highlights, ...(fetched.highlights || {}) },
+            cta: { ...DEFAULT_CONTENT.cta, ...(fetched.cta || {}) },
+            contact: { ...DEFAULT_CONTENT.contact, ...(fetched.contact || {}) },
+            stats: Array.isArray(fetched.stats) ? fetched.stats : DEFAULT_CONTENT.stats,
+            gallery: Array.isArray(fetched.gallery) ? fetched.gallery : DEFAULT_CONTENT.gallery,
+          };
+          setContent(merged);
+          // Sync database fetched metadata back to local storage cache
+          try {
+            localStorage.setItem('faith_foundation_sandbox_content', JSON.stringify(merged));
+          } catch (cacheErr) {
+            console.error('Failed to cache fetched content:', cacheErr);
+          }
         }
       } catch (err: any) {
         const msg = err?.message || String(err) || '';
@@ -227,19 +255,27 @@ export const useContent = () => {
           (payload) => {
             if (payload.new?.content) {
               const newContent = payload.new.content as Partial<SiteContent>;
-              setContent(prev => ({
-                ...prev,
-                ...newContent,
-                branding: { ...prev.branding, ...(newContent.branding || {}) },
-                hero: { ...prev.hero, ...(newContent.hero || {}) },
-                alumni: { ...prev.alumni, ...(newContent.alumni || {}) },
-                philosophy: { ...prev.philosophy, ...(newContent.philosophy || {}) },
-                highlights: { ...prev.highlights, ...(newContent.highlights || {}) },
-                cta: { ...prev.cta, ...(newContent.cta || {}) },
-                contact: { ...prev.contact, ...(newContent.contact || {}) },
-                stats: Array.isArray(newContent.stats) ? newContent.stats : prev.stats,
-                gallery: Array.isArray(newContent.gallery) ? newContent.gallery : prev.gallery,
-              }));
+              setContent(prev => {
+                const updated: SiteContent = {
+                  ...prev,
+                  ...newContent,
+                  branding: { ...prev.branding, ...(newContent.branding || {}) },
+                  hero: { ...prev.hero, ...(newContent.hero || {}) },
+                  alumni: { ...prev.alumni, ...(newContent.alumni || {}) },
+                  philosophy: { ...prev.philosophy, ...(newContent.philosophy || {}) },
+                  highlights: { ...prev.highlights, ...(newContent.highlights || {}) },
+                  cta: { ...prev.cta, ...(newContent.cta || {}) },
+                  contact: { ...prev.contact, ...(newContent.contact || {}) },
+                  stats: Array.isArray(newContent.stats) ? newContent.stats : prev.stats,
+                  gallery: Array.isArray(newContent.gallery) ? newContent.gallery : prev.gallery,
+                };
+                try {
+                  localStorage.setItem('faith_foundation_sandbox_content', JSON.stringify(updated));
+                } catch (e) {
+                  // ignore
+                }
+                return updated;
+              });
             }
           }
         )
@@ -260,22 +296,22 @@ export const useContent = () => {
   }, []);
 
   const updateContent = async (newContent: SiteContent) => {
-    // Check if we are running in local sandbox session
+    // Always store locally so edits reflect immediately and stay cached
+    try {
+      localStorage.setItem('faith_foundation_sandbox_content', JSON.stringify(newContent));
+    } catch (e) {
+      console.error('Error saving local content cache:', e);
+    }
+
     const isSandboxActive = !!localStorage.getItem('faith_foundation_sandbox_session');
 
     if (isSandboxActive) {
-      try {
-        localStorage.setItem('faith_foundation_sandbox_content', JSON.stringify(newContent));
-        setContent(newContent);
-        return;
-      } catch (e) {
-        console.error('Error saving sandboxed content:', e);
-        throw e;
-      }
+      setContent(newContent);
+      return;
     }
 
     if (!isSupabaseConfigured) {
-      console.warn('Cannot update content: Supabase not configured');
+      console.warn('Cannot update content on Supabase: not configured');
       setContent(newContent);
       return;
     }
@@ -288,7 +324,8 @@ export const useContent = () => {
       if (error) throw error;
       setContent(newContent);
     } catch (err) {
-      console.error('Error updating site content:', err);
+      console.error('Error updating site content on Supabase:', err);
+      setContent(newContent);
       throw err;
     }
   };
