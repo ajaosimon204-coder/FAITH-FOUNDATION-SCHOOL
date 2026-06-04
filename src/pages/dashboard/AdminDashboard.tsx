@@ -44,6 +44,15 @@ import { supabase } from '../../lib/supabase';
 import { sendNotification } from '../../lib/notifications';
 import ImageUploader from '../../components/ImageUploader';
 import ContentEditor from '../../components/ContentEditor';
+import { 
+  syncFetchAnnouncements, syncSaveAnnouncements,
+  syncFetchStudents, syncSaveStudents, syncSaveStudent, syncDeleteStudent,
+  syncFetchStaff, syncSaveStaffList, syncSaveStaffMember,
+  syncFetchInvoices, syncSaveInvoices, syncSaveInvoice,
+  syncFetchFeeStructures, syncSaveFeeStructures,
+  syncFetchAdmissions, syncSaveAdmissions, syncSaveAdmission,
+  syncFetchCbtExam, syncSaveCbtSettings
+} from '../../lib/sync';
 
 import Communications from './Communications';
 
@@ -136,7 +145,11 @@ function OverviewView() {
   const [newType, setNewType] = useState('general');
 
   useEffect(() => {
-    localStorage.setItem('ff_announcements', JSON.stringify(announcements));
+    syncFetchAnnouncements().then(res => setAnnouncements(res));
+  }, []);
+
+  useEffect(() => {
+    syncSaveAnnouncements(announcements);
   }, [announcements]);
 
   const handleCreateAnnouncement = (e: React.FormEvent) => {
@@ -538,7 +551,11 @@ function StudentsView() {
   const [newCommDetails, setNewCommDetails] = useState('');
 
   useEffect(() => {
-    localStorage.setItem('ff_students', JSON.stringify(students));
+    syncFetchStudents().then(res => setStudents(res));
+  }, []);
+
+  useEffect(() => {
+    syncSaveStudents(students);
   }, [students]);
 
   const handleCreateStudent = (e: React.FormEvent) => {
@@ -1245,7 +1262,11 @@ function StaffView() {
   const [editStaffReview, setEditStaffReview] = useState('');
 
   useEffect(() => {
-    localStorage.setItem('ff_staff', JSON.stringify(staffList));
+    syncFetchStaff().then(res => setStaffList(res));
+  }, []);
+
+  useEffect(() => {
+    syncSaveStaffList(staffList);
   }, [staffList]);
 
   const handleOpenDetails = (staff: StaffRecord) => {
@@ -1858,6 +1879,11 @@ function StaffView() {
 // ============================================================================
 
 function FinanceView() {
+  useEffect(() => {
+    syncFetchInvoices().then(res => setInvoices(res));
+    syncFetchFeeStructures().then(res => setFeeStructures(res));
+  }, []);
+
   const [invoices, setInvoices] = useState<any[]>(() => {
     const saved = localStorage.getItem('ff_all_student_invoices');
     if (saved) return JSON.parse(saved);
@@ -1915,7 +1941,7 @@ function FinanceView() {
   // Synchronize base listings to localStorage
   const saveInvoices = (list: any[]) => {
     setInvoices(list);
-    localStorage.setItem('ff_all_student_invoices', JSON.stringify(list));
+    syncSaveInvoices(list);
   };
 
   const handleCreateInvoice = (e: React.FormEvent) => {
@@ -2014,7 +2040,7 @@ function FinanceView() {
       ancillary: editAncil
     };
     setFeeStructures(nextArr);
-    localStorage.setItem('ff_fee_structures', JSON.stringify(nextArr));
+    syncSaveFeeStructures(nextArr);
     setActiveFeeEditIdx(null);
     showBannerAlert('Fee rate sheets saved');
   };
