@@ -10,7 +10,8 @@ import {
   MessageCircle,
   HelpCircle,
   FolderMinus,
-  Check
+  Check,
+  Download
 } from 'lucide-react';
 import ImageUploader from '../../../components/ImageUploader';
 
@@ -36,6 +37,7 @@ interface LectureNote {
   type: 'pdf' | 'video' | 'doc';
   sizeOrDuration: string;
   author: string;
+  fileUrl?: string;
 }
 
 export default function LearningHub() {
@@ -379,12 +381,25 @@ export default function LearningHub() {
                   <h4 className="text-xs font-bold text-slate-800 leading-tight truncate uppercase" title={lec.title}>{lec.title}</h4>
                   <p className="text-[9px] text-slate-400 font-medium">Author/Instructor: {lec.author} &middot; <span className="font-mono">{lec.sizeOrDuration}</span></p>
                 </div>
-                <button 
-                  onClick={() => alert(`Starting client offline cache buffer downloading: ${lec.title}`)}
-                  className="bg-white group-hover:bg-primary group-hover:text-white border border-slate-200 group-hover:border-primary w-10 h-10 rounded-xl flex items-center justify-center text-slate-600 transition-all shadow-sm"
-                >
-                  <ExternalLink size={14} />
-                </button>
+                {lec.fileUrl ? (
+                  <a 
+                    href={lec.fileUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    download={lec.title}
+                    className="bg-primary/10 text-primary hover:bg-primary hover:text-white w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-sm"
+                    title="Download Syllabus Attachment"
+                  >
+                    <Download size={14} />
+                  </a>
+                ) : (
+                  <button 
+                    onClick={() => alert(`Starting client offline cache buffer downloading: ${lec.title}`)}
+                    className="bg-white group-hover:bg-primary group-hover:text-white border border-slate-200 group-hover:border-primary w-10 h-10 rounded-xl flex items-center justify-center text-slate-600 transition-all shadow-sm"
+                  >
+                    <ExternalLink size={14} />
+                  </button>
+                )}
               </div>
             ))}
           </div>

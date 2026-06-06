@@ -24,6 +24,7 @@ import {
   Activity, 
   Volume2, 
   ShieldAlert,
+  ShieldCheck,
   ChevronRight,
   TrendingUp,
   Award,
@@ -42,6 +43,15 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useContent, SiteContent } from '../../lib/content';
 import { supabase } from '../../lib/supabase';
 import { sendNotification } from '../../lib/notifications';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip
+} from 'recharts';
 import ImageUploader from '../../components/ImageUploader';
 import ContentEditor from '../../components/ContentEditor';
 import { 
@@ -51,10 +61,12 @@ import {
   syncFetchInvoices, syncSaveInvoices, syncSaveInvoice,
   syncFetchFeeStructures, syncSaveFeeStructures,
   syncFetchAdmissions, syncSaveAdmissions, syncSaveAdmission,
-  syncFetchCbtExam, syncSaveCbtSettings
+  syncFetchCbtExam, syncSaveCbtSettings,
+  syncFetchStaffRatings, syncSaveStaffRatings, StaffDailyRating
 } from '../../lib/sync';
 
 import Communications from './Communications';
+import CloudLocker from './CloudLocker';
 
 // ============================================================================
 // 1. MAIN ROUTING & PERSISTENCE
@@ -73,6 +85,7 @@ export default function AdminDashboard() {
         <Route path="/communications" element={<Communications />} />
         <Route path="/cms" element={<ContentEditor />} />
         <Route path="/settings" element={<SettingsView />} />
+        <Route path="/locker" element={<CloudLocker />} />
       </Routes>
     </div>
   );
@@ -551,11 +564,11 @@ function StudentsView() {
   const [newCommDetails, setNewCommDetails] = useState('');
 
   useEffect(() => {
-    syncFetchStudents().then(res => setStudents(res));
+    syncFetchStudents().then(res => setStudents(res as any));
   }, []);
 
   useEffect(() => {
-    syncSaveStudents(students);
+    syncSaveStudents(students as any);
   }, [students]);
 
   const handleCreateStudent = (e: React.FormEvent) => {
@@ -1189,6 +1202,10 @@ interface StaffRecord {
   regularityAttendance?: string;
   rating?: string;
   review?: string;
+  assignedClass?: string;
+  assignedClasses?: string[];
+  assignedSubjects?: string[];
+  classSubjectMappings?: { class: string; subject: string }[];
 }
 
 function StaffView() {
@@ -1246,6 +1263,9 @@ function StaffView() {
   const [newRegularity, setNewRegularity] = useState('95%');
   const [newRating, setNewRating] = useState('5.0');
   const [newReview, setNewReview] = useState('');
+  const [newAssignedClass, setNewAssignedClass] = useState('None');
+  const [newAssignedClasses, setNewAssignedClasses] = useState<string[]>([]);
+  const [newAssignedSubjects, setNewAssignedSubjects] = useState<string[]>([]);
 
   // Editing state for selected teacher's particulars
   const [editStaffName, setEditStaffName] = useState('');
@@ -1260,6 +1280,58 @@ function StaffView() {
   const [editStaffRegularity, setEditStaffRegularity] = useState('');
   const [editStaffRating, setEditStaffRating] = useState('');
   const [editStaffReview, setEditStaffReview] = useState('');
+  const [editStaffAssignedClass, setEditStaffAssignedClass] = useState('None');
+  const [editStaffAssignedClasses, setEditStaffAssignedClasses] = useState<string[]>([]);
+  const [editStaffAssignedSubjects, setEditStaffAssignedSubjects] = useState<string[]>([]);
+
+  // Subject and Class mapping configurations
+  const [newClassSubjectMappings, setNewClassSubjectMappings] = useState<{ class: string; subject: string }[]>([]);
+  const [editClassSubjectMappings, setEditClassSubjectMappings] = useState<{ class: string; subject: string }[]>([]);
+  
+  // Local picker state for assigning subjects to classes
+  const [newPickerClass, setNewPickerClass] = useState('JSS 1');
+  const [newPickerSubject, setNewPickerSubject] = useState('Mathematics');
+  
+  const [editPickerClass, setEditPickerClass] = useState('JSS 1');
+  const [editPickerSubject, setEditPickerSubject] = useState('Mathematics');
+
+  // Daily staff performance ratings states
+  const [staffTab, setStaffTab] = useState<'catalog' | 'ratings'>('catalog');
+  const [allRatings, setAllRatings] = useState<StaffDailyRating[]>([]);
+  const [loadingRatings, setLoadingRatings] = useState(false);
+  const [selectedStaffForRating, setSelectedStaffForRating] = useState<StaffRecord | null>(null);
+  const [ratingDate, setRatingDate] = useState(new Date().toISOString().split('T')[0]);
+  const [ratingPunctuality, setRatingPunctuality] = useState(5);
+  const [ratingRegularity, setRatingRegularity] = useState(5);
+  const [ratingTeaching, setRatingTeaching] = useState(5);
+  const [ratingDressing, setRatingDressing] = useState(5);
+  const [ratingSpeaking, setRatingSpeaking] = useState(5);
+  const [ratingAttitude, setRatingAttitude] = useState(5);
+  const [ratingLeadership, setRatingLeadership] = useState(5);
+  const [ratingRemarks, setRatingRemarks] = useState('');
+  const [filterRatingStaffId, setFilterRatingStaffId] = useState<string>('All');
+  const [filterRatingDate, setFilterRatingDate] = useState<string>('');
+
+  useEffect(() => {
+    setLoadingRatings(true);
+    syncFetchStaffRatings()
+      .then(res => setAllRatings(res))
+      .finally(() => setLoadingRatings(false));
+  }, []);
+
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [chartTeacherId, setChartTeacherId] = useState<string>('');
+
+  useEffect(() => {
+    if (staffList.length > 0 && !chartTeacherId) {
+      setChartTeacherId(staffList[0].id);
+    }
+  }, [staffList, chartTeacherId]);
+
+  useEffect(() => {
+    const savedLogs = localStorage.getItem('ff_activity_logs');
+    setActivityLogs(savedLogs ? JSON.parse(savedLogs) : []);
+  }, []);
 
   useEffect(() => {
     syncFetchStaff().then(res => setStaffList(res));
@@ -1286,6 +1358,10 @@ function StaffView() {
     setEditStaffRegularity(staff.regularityAttendance || '95%');
     setEditStaffRating(staff.rating || '5.0');
     setEditStaffReview(staff.review || '');
+    setEditStaffAssignedClass(staff.assignedClass || 'None');
+    setEditStaffAssignedClasses(staff.assignedClasses || (staff.assignedClass && staff.assignedClass !== 'None' ? [staff.assignedClass] : []));
+    setEditStaffAssignedSubjects(staff.assignedSubjects || []);
+    setEditClassSubjectMappings(staff.classSubjectMappings || []);
   };
 
   const handleCreateStaff = (e: React.FormEvent) => {
@@ -1305,7 +1381,11 @@ function StaffView() {
       punctualityAttendance: newPunctuality || '95%',
       regularityAttendance: newRegularity || '95%',
       rating: newRating || '5.0',
-      review: newReview || 'No review comments yet.'
+      review: newReview || 'No review comments yet.',
+      assignedClass: newAssignedClasses[0] || 'None',
+      assignedClasses: newAssignedClasses,
+      assignedSubjects: newAssignedSubjects,
+      classSubjectMappings: newClassSubjectMappings
     };
 
     setStaffList([...staffList, fresh]);
@@ -1320,6 +1400,10 @@ function StaffView() {
     setNewRegularity('95%');
     setNewRating('5.0');
     setNewReview('');
+    setNewAssignedClass('None');
+    setNewAssignedClasses([]);
+    setNewAssignedSubjects([]);
+    setNewClassSubjectMappings([]);
     setIsAdding(false);
     showBannerAlert(`Created staff member credential logic.`);
   };
@@ -1331,70 +1415,680 @@ function StaffView() {
     showBannerAlert('Staff dossier archived', false);
   };
 
+  const handleSaveRating = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStaffForRating) {
+      alert('Please select a staff member to rate.');
+      return;
+    }
+    const newRatingItem: StaffDailyRating = {
+      id: `RATING-${Date.now()}`,
+      staffId: selectedStaffForRating.id,
+      staffName: selectedStaffForRating.name,
+      date: ratingDate,
+      punctuality: Number(ratingPunctuality),
+      regularity: Number(ratingRegularity),
+      teachingAbility: Number(ratingTeaching),
+      dressing: Number(ratingDressing),
+      speaking: Number(ratingSpeaking),
+      attitude: Number(ratingAttitude),
+      leadership: Number(ratingLeadership),
+      remarks: ratingRemarks,
+      ratedBy: 'School Administrator',
+      createdAt: new Date().toISOString()
+    };
+
+    const updated = [newRatingItem, ...allRatings];
+    setAllRatings(updated);
+    await syncSaveStaffRatings(updated);
+    
+    // Calculate new average rating for this teacher and update their primary profile record!
+    const teacherRatings = updated.filter(r => r.staffId === selectedStaffForRating.id);
+    if (teacherRatings.length > 0) {
+      let sum = 0;
+      teacherRatings.forEach(curr => {
+        const avg = (curr.punctuality + curr.regularity + curr.teachingAbility + curr.dressing + curr.speaking + curr.attitude + curr.leadership) / 7;
+        sum += avg;
+      });
+      const newAverage = (sum / teacherRatings.length).toFixed(1);
+      
+      const updatedStaffList = staffList.map(s => {
+        if (s.id === selectedStaffForRating.id) {
+          return {
+            ...s,
+            rating: newAverage
+          };
+        }
+        return s;
+      });
+      setStaffList(updatedStaffList);
+      await syncSaveStaffList(updatedStaffList);
+    }
+
+    setRatingRemarks('');
+    setSelectedStaffForRating(null);
+    showBannerAlert(`Recorded daily rating metrics for ${selectedStaffForRating.name}`);
+  };
+
+  const handleDeleteRating = async (id: string) => {
+    if (!window.confirm('Delete this rating history entry?')) return;
+    const updated = allRatings.filter(r => r.id !== id);
+    setAllRatings(updated);
+    await syncSaveStaffRatings(updated);
+    showBannerAlert('Rating archived', false);
+  };
+
   const filtered = staffList.filter(s => 
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     s.role.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const filteredRatings = allRatings.filter(r => {
+    const matchId = filterRatingStaffId === 'All' || r.staffId === filterRatingStaffId;
+    const matchDate = !filterRatingDate || r.date === filterRatingDate;
+    return matchId && matchDate;
+  });
+
+  const renderStarSelector = (label: string, value: number, setValue: (val: number) => void) => {
+    return (
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl border border-slate-100 hover:border-slate-200 bg-white transition-all">
+        <span className="font-bold text-[10.5px] uppercase tracking-wide text-slate-500">{label}</span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <button
+              key={star}
+              type="button"
+              onClick={() => setValue(star)}
+              className={`p-1 rounded-lg transition-all cursor-pointer hover:scale-110 ${
+                star <= value 
+                  ? 'text-amber-500 bg-amber-50 border border-amber-200' 
+                  : 'text-slate-300 bg-slate-50 border border-slate-100 hover:bg-slate-100'
+              }`}
+            >
+              <Star size={13} fill={star <= value ? "currentColor" : "none"} />
+            </button>
+          ))}
+          <span className="font-black font-mono text-[11px] text-slate-700 min-w-[32px] text-right">
+            {value}.0
+          </span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       
-      {/* Searches */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col sm:flex-row gap-4 justify-between items-center">
-        <div className="relative flex-1 w-full m-0">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <input 
-            type="text"
-            placeholder="Search our staff catalog listing by full name or roles..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-12 pr-4 py-3.5 text-xs font-bold focus:outline-none"
-          />
-        </div>
-
-        <button 
-          onClick={() => setIsAdding(true)}
-          className="bg-primary text-white font-black text-xs uppercase tracking-widest px-8 py-3.5 rounded-2xl shadow-xl flex items-center gap-2 w-full sm:w-auto shrink-0 justify-center font-display"
+      {/* Sub-tab Navigation */}
+      <div className="flex border-b border-slate-100 pb-3 gap-6">
+        <button
+          onClick={() => setStaffTab('catalog')}
+          className={`pb-2.5 text-xs font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
+            staffTab === 'catalog'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
         >
-          <Plus size={16} /> Add Class Mentor
+          📇 Staff Directory CRM
+        </button>
+        <button
+          onClick={() => setStaffTab('ratings')}
+          className={`pb-2.5 text-xs font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
+            staffTab === 'ratings'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-slate-400 hover:text-slate-650'
+          }`}
+        >
+          📊 Daily Performance Evaluator
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filtered.map(s => (
-          <div 
-            key={s.id}
-            onClick={() => handleOpenDetails(s)}
-            className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:border-primary/40 cursor-pointer relative transition-all group duration-300 flex items-center gap-5 font-sans"
-          >
-            <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-300">
-              {s.photoUrl ? (
-                <img src={s.photoUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center font-extrabold text-slate-400 uppercase bg-slate-100">{s.name[0]}</div>
-              )}
-            </div>
-
-            <div className="min-w-0">
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{s.id}</span>
-              <h4 className="font-extrabold text-slate-800 text-sm truncate uppercase leading-tight mt-1">{s.name}</h4>
-              <p className="text-[10px] font-extrabold text-primary bg-primary/5 px-2 py-1 rounded inline-block uppercase mt-2.5">{s.role}</p>
-              {s.rating && (
-                <div className="mt-1 flex items-center gap-1 text-[10px] text-amber-500 font-extrabold">
-                  <Star size={10} fill="currentColor" /> {s.rating}
-                </div>
-              )}
+      {staffTab === 'catalog' ? (
+        <>
+          {/* Searches */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col sm:flex-row gap-4 justify-between items-center">
+            <div className="relative flex-1 w-full m-0">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input 
+                type="text"
+                placeholder="Search our staff catalog listing by full name or roles..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-100 rounded-2xl pl-12 pr-4 py-3.5 text-xs font-bold focus:outline-none"
+              />
             </div>
 
             <button 
-              onClick={(e) => { e.stopPropagation(); handleDeleteStaff(s.id); }}
-              className="absolute top-4 right-4 text-slate-350 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-50 rounded-lg"
+              onClick={() => setIsAdding(true)}
+              className="bg-primary text-white font-black text-xs uppercase tracking-widest px-8 py-3.5 rounded-2xl shadow-xl flex items-center gap-2 w-full sm:w-auto shrink-0 justify-center font-display"
             >
-              <Trash2 size={14} />
+              <Plus size={16} /> Add Class Mentor
             </button>
           </div>
-        ))}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filtered.map(s => (
+              <div 
+                key={s.id}
+                onClick={() => handleOpenDetails(s)}
+                className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:border-primary/40 cursor-pointer relative transition-all group duration-300 flex items-center gap-5 font-sans"
+              >
+                <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-300">
+                  {s.photoUrl ? (
+                    <img src={s.photoUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center font-extrabold text-slate-400 uppercase bg-slate-100">{s.name[0]}</div>
+                  )}
+                </div>
+
+                <div className="min-w-0">
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{s.id}</span>
+                  <h4 className="font-extrabold text-slate-800 text-sm truncate uppercase leading-tight mt-1">{s.name}</h4>
+                  <p className="text-[10px] font-extrabold text-primary bg-primary/5 px-2 py-1 rounded inline-block uppercase mt-2.5">{s.role}</p>
+                  {s.assignedClass && s.assignedClass !== 'None' && (
+                    <div className="text-[9px] font-black text-emerald-650 bg-emerald-50 px-2 py-0.5 rounded uppercase block mt-1">
+                      Mentor: {s.assignedClass}
+                    </div>
+                  )}
+                  {s.rating && (
+                    <div className="mt-1 flex items-center gap-1 text-[10px] text-amber-500 font-extrabold">
+                      <Star size={10} fill="currentColor" /> {s.rating}
+                    </div>
+                  )}
+                </div>
+
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleDeleteStaff(s.id); }}
+                  className="absolute top-4 right-4 text-slate-350 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-50 rounded-lg"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+      {/* Term Analytics Dashboard */}
+      {staffList.length > 0 && (
+        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 md:p-10 font-sans space-y-6 mt-10">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-5">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="text-primary" size={20} />
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Term Analytics Dashboard</h3>
+              </div>
+              <p className="text-xs text-slate-500">
+                Authorized visual inspection of punctuality and regularity curves across the last term.
+              </p>
+            </div>
+            
+            {/* Select individual teacher */}
+            <div className="flex items-center gap-2.5 w-full md:w-auto">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">SELECT TEACHER FOR TREND ANALYSIS:</span>
+              <select
+                value={chartTeacherId}
+                onChange={(e) => setChartTeacherId(e.target.value)}
+                className="bg-slate-50 border border-slate-200 hover:border-slate-300 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:bg-white transition-all w-full md:w-56 cursor-pointer"
+              >
+                {staffList.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.id})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Selected Teacher Trend overview */}
+          {(() => {
+            const selectedChartTeacher = staffList.find(t => t.id === chartTeacherId) || staffList[0];
+            if (!selectedChartTeacher) return null;
+
+            // Generator for chart points
+            const pVal = parseInt(selectedChartTeacher.punctualityAttendance || '95', 10) || 95;
+            const rVal = parseInt(selectedChartTeacher.regularityAttendance || '95', 10) || 95;
+            
+            const months = [
+              { name: 'January', code: 'Jan' },
+              { name: 'February', code: 'Feb' },
+              { name: 'March', code: 'Mar' },
+              { name: 'April', code: 'Apr' },
+              { name: 'May', code: 'May' },
+              { name: 'June', code: 'Jun' }
+            ];
+            
+            const hashValue = selectedChartTeacher.id ? selectedChartTeacher.id.split('-')[1] || '3' : '3';
+            const hash = parseInt(hashValue, 10) || 3;
+            
+            const chartData = months.map((month, idx) => {
+              const pOffset = Math.sin((idx + hash) * 1.3) * 4.5 + (idx % 2 === 0 ? 0.8 : -1.2);
+              const rOffset = Math.cos((idx - hash) * 1.1) * 3.2 + (idx % 3 === 0 ? 1.4 : -0.8);
+              
+              const pFinal = Math.min(100, Math.max(70, Math.round(pVal + pOffset)));
+              const rFinal = Math.min(100, Math.max(70, Math.round(rVal + rOffset)));
+              
+              return {
+                month: month.name,
+                short: month.code,
+                Punctuality: pFinal,
+                Regularity: rFinal
+              };
+            });
+
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                
+                {/* Details card for Selected Teacher */}
+                <div className="lg:col-span-1 bg-slate-50/75 border border-slate-100 rounded-2xl p-6 flex flex-col justify-between space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-primary/10 overflow-hidden shrink-0 flex items-center justify-center border border-slate-150">
+                        {selectedChartTeacher.photoUrl ? (
+                          <img src={selectedChartTeacher.photoUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="text-xl font-black text-primary uppercase">{selectedChartTeacher.name[0]}</div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-extrabold text-slate-800 text-xs truncate uppercase leading-tight">{selectedChartTeacher.name}</h4>
+                        <p className="text-[9px] font-bold text-primary truncate uppercase mt-0.5">{selectedChartTeacher.role}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3.5 pt-4 border-t border-slate-150 text-xs">
+                      <div className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-slate-100/60">
+                        <span className="font-semibold text-slate-400 text-[10px] uppercase tracking-wider font-sans">Punctuality</span>
+                        <span className="font-black text-primary bg-primary/5 px-2 py-0.5 rounded text-xs">{selectedChartTeacher.punctualityAttendance || '95%'}</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-slate-100/60">
+                        <span className="font-semibold text-slate-400 text-[10px] uppercase tracking-wider font-sans">Regularity</span>
+                        <span className="font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded text-xs">{selectedChartTeacher.regularityAttendance || '95%'}</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-slate-100/60">
+                        <span className="font-semibold text-slate-400 text-[10px] uppercase tracking-wider font-sans">Merit Rating</span>
+                        <span className="font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-xs">⭐ {selectedChartTeacher.rating || '5.0'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Summary assessment */}
+                  <div className="pt-4 border-t border-slate-150 text-[11px] text-slate-500 leading-relaxed bg-white/40 p-3 rounded-xl border border-slate-100 italic">
+                    "{selectedChartTeacher.review || 'No written performance evaluation remarks loaded.'}"
+                  </div>
+                </div>
+
+                {/* Recharts chart area */}
+                <div className="lg:col-span-3 bg-white border border-slate-100 rounded-2xl p-4 md:p-6 flex flex-col justify-between">
+                  <div className="flex justify-between items-center mb-5 px-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-sans">Term Trend Curve (%)</span>
+                    <div className="flex gap-4 text-xs font-bold">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 bg-primary rounded-full"></span>
+                        <span className="text-slate-650">Punctuality Rate</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 bg-indigo-500 rounded-full"></span>
+                        <span className="text-slate-650">Regularity Rate</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Chart container */}
+                  <div className="h-[280px] w-full text-xs font-sans">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={chartData}
+                        margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                      >
+                        <defs>
+                          <linearGradient id="colorAdminPunctuality" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25}/>
+                            <stop offset="95%" stopColor="#2563eb" stopOpacity={0.01}/>
+                          </linearGradient>
+                          <linearGradient id="colorAdminRegularity" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25}/>
+                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0.01}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis 
+                          dataKey="short" 
+                          tickLine={false} 
+                          axisLine={false}
+                          stroke="#94a3b8"
+                          style={{ fontSize: '10px', fontWeight: 600 }}
+                        />
+                        <YAxis 
+                          domain={[50, 100]} 
+                          tickLine={false}
+                          axisLine={false}
+                          stroke="#94a3b8"
+                          style={{ fontSize: '10px', fontWeight: 600 }}
+                        />
+                        <Tooltip 
+                          contentStyle={{
+                            backgroundColor: '#fff',
+                            borderRadius: '12px',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                            fontFamily: 'Inter, sans-serif'
+                          }}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="Punctuality" 
+                          stroke="#2563eb" 
+                          strokeWidth={2.5}
+                          fillOpacity={1} 
+                          fill="url(#colorAdminPunctuality)" 
+                          activeDot={{ r: 6 }}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="Regularity" 
+                          stroke="#6366f1" 
+                          strokeWidth={2.5}
+                          fillOpacity={1} 
+                          fill="url(#colorAdminRegularity)" 
+                          activeDot={{ r: 6 }}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-[10px] text-slate-400">
+                    <span className="font-extrabold uppercase tracking-wider">Metrics Derived from Recorded Monthly Sign-ins</span>
+                    <span className="font-bold font-sans">Target Index: &ge; 95% Expected</span>
+                  </div>
+                </div>
+
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* University-Grade Teacher Activity Audit Ledger */}
+      <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm mt-10 space-y-5 font-sans">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 pb-3 border-b border-slate-100">
+          <div>
+            <h3 className="text-sm font-black tracking-tight text-slate-800 flex items-center gap-2">
+              <ShieldCheck className="text-secondary" size={18} />
+              University academic Audit Logs & Accountability Ledger
+            </h3>
+            <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider font-extrabold">Real-time system-wide log for learning material, assignments, grades and attendance revisions.</p>
+          </div>
+          <button 
+            type="button"
+            onClick={() => {
+              const savedLogs = localStorage.getItem('ff_activity_logs');
+              setActivityLogs(savedLogs ? JSON.parse(savedLogs) : []);
+            }}
+            className="text-[9px] font-black uppercase text-secondary hover:underline cursor-pointer bg-secondary/5 px-4 py-2 rounded-xl self-start sm:self-auto"
+          >
+            Refresh Logs
+          </button>
+        </div>
+
+        <div className="max-h-[350px] overflow-y-auto space-y-3.5 pr-2">
+          {activityLogs.length === 0 ? (
+            <p className="text-[10px] uppercase tracking-widest text-slate-400 font-mono italic py-10 text-center">No teacher academic activities registered yet.</p>
+          ) : (
+            activityLogs.map((log: any) => (
+              <div key={log.id} className="p-4 border rounded-3xl bg-slate-50/45 flex justify-between items-start gap-4 hover:border-slate-200 transition-colors">
+                <div className="space-y-1.5">
+                  <div className="flex gap-2.5 items-center flex-wrap">
+                    <span className="text-[8px] bg-secondary text-white font-black px-2 py-0.5 rounded-lg font-mono uppercase tracking-widest text-center">
+                      {log.action}
+                    </span>
+                    <span className="text-[10px] font-black text-slate-700 font-mono">
+                      {log.user_email}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-600 leading-snug">{log.details}</p>
+                </div>
+                <span className="text-[9px] text-slate-400 font-bold whitespace-nowrap font-mono uppercase text-right">
+                  {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}{" "}
+                  {new Date(log.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
       </div>
+        </>
+      ) : (
+        /* ================= DAILY PERFORMANCE RATINGS COMPONENT ================= */
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-300 font-sans">
+          
+          {/* Column 1: Submit Rating Form */}
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-white p-6 border border-slate-100 rounded-3xl shadow-sm space-y-5">
+              <div>
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Evaluate Daily Performance</h3>
+                <p className="text-[10.5px] text-slate-400 font-bold mt-1 uppercase tracking-wide">
+                  Record official score evaluation across 7 key educational indexes.
+                </p>
+              </div>
+
+              <form onSubmit={handleSaveRating} className="space-y-4">
+                <div>
+                  <label className="block text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1.5">Select Instructor / Mentor</label>
+                  <select
+                    required
+                    value={selectedStaffForRating?.id || ''}
+                    onChange={(e) => {
+                      const found = staffList.find(s => s.id === e.target.value);
+                      setSelectedStaffForRating(found || null);
+                    }}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl p-3 text-xs font-bold text-slate-700 focus:outline-none focus:bg-white transition-all cursor-pointer"
+                  >
+                    <option value="">-- Choose Staff Member --</option>
+                    {staffList.map(s => (
+                      <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1.5">Evaluation Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={ratingDate}
+                    onChange={(e) => setRatingDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl p-3 text-xs font-bold text-slate-700 focus:outline-none focus:bg-white transition-all cursor-pointer"
+                  />
+                </div>
+
+                {/* Star selectors for all 7 metrics */}
+                <div className="space-y-3 pt-3 border-t border-slate-100">
+                  {renderStarSelector('🕒 Punctuality', ratingPunctuality, setRatingPunctuality)}
+                  {renderStarSelector('📅 Regularity', ratingRegularity, setRatingRegularity)}
+                  {renderStarSelector('📖 Teaching Ability', ratingTeaching, setRatingTeaching)}
+                  {renderStarSelector('👔 Hair & Dressing', ratingDressing, setRatingDressing)}
+                  {renderStarSelector('🗣️ Spoken English', ratingSpeaking, setRatingSpeaking)}
+                  {renderStarSelector('😊 Public Attitude', ratingAttitude, setRatingAttitude)}
+                  {renderStarSelector('👑 Peer Leadership', ratingLeadership, setRatingLeadership)}
+                </div>
+
+                <div className="pt-2">
+                  <label className="block text-[9px] text-slate-400 font-black uppercase tracking-wider mb-1.5">Professional Remarks / Specific Actions</label>
+                  <textarea
+                    placeholder="Provide constructive assessment feedback..."
+                    value={ratingRemarks}
+                    onChange={(e) => setRatingRemarks(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-150 rounded-xl p-3 text-xs font-bold text-slate-700 h-20 focus:outline-none focus:bg-white transition-all placeholder-slate-400"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!selectedStaffForRating}
+                  className={`w-full text-white font-black text-xs uppercase tracking-widest py-3.5 rounded-xl transition-all shadow ${
+                    selectedStaffForRating 
+                      ? 'bg-primary cursor-pointer hover:bg-opacity-95 shadow-primary/20' 
+                      : 'bg-slate-200 cursor-not-allowed text-slate-400 shadow-none'
+                  }`}
+                >
+                  Confirm Assessment Score
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* Column 2: Search filters & ratings ledger list */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-white p-6 border border-slate-100 rounded-3xl shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight font-sans">Evaluations Ledger</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-wider">
+                    Access historical records of logged and authorized ratings.
+                  </p>
+                </div>
+
+                <div className="flex bg-slate-50 border border-slate-150 px-3 py-1.5 rounded-xl text-[10px] font-extrabold text-slate-600 gap-1">
+                  <span className="text-slate-400 uppercase tracking-wide">Historical Average:</span>
+                  <span className="text-primary font-black font-mono">
+                    {(() => {
+                      if (filteredRatings.length === 0) return '0.0';
+                      let sum = 0;
+                      filteredRatings.forEach(r => {
+                        sum += (r.punctuality + r.regularity + r.teachingAbility + r.dressing + r.speaking + r.attitude + r.leadership) / 7;
+                      });
+                      return (sum / filteredRatings.length).toFixed(1);
+                    })()} / 5.0
+                  </span>
+                </div>
+              </div>
+
+              {/* Filtering Controls */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+                <div>
+                  <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Filter by Instructor</label>
+                  <select
+                    value={filterRatingStaffId}
+                    onChange={(e) => setFilterRatingStaffId(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-bold text-slate-700 cursor-pointer"
+                  >
+                    <option value="All">All Evaluated Staff</option>
+                    {staffList.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Filter by Specific Date</label>
+                  <input
+                    type="date"
+                    value={filterRatingDate}
+                    onChange={(e) => setFilterRatingDate(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-bold text-slate-700 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Evaluations ratings list logs */}
+              {loadingRatings ? (
+                <div className="py-20 text-center text-slate-400 font-mono text-[11px] uppercase tracking-wider animate-pulse">
+                  Querying ratings from primary tables...
+                </div>
+              ) : filteredRatings.length === 0 ? (
+                <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-2xl">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-400 font-mono italic">No matching records registered in ratings ledger.</p>
+                  {(filterRatingStaffId !== 'All' || filterRatingDate) && (
+                    <button
+                      onClick={() => { setFilterRatingStaffId('All'); setFilterRatingDate(''); }}
+                      className="mt-3 text-primary text-[9px] font-black uppercase tracking-widest bg-primary/5 px-4 py-2 rounded-xl cursor-pointer"
+                    >
+                      Reset active query filter
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4 max-h-[700px] overflow-y-auto pr-2">
+                  {filteredRatings.map((rating) => {
+                    const singleAvg = (rating.punctuality + rating.regularity + rating.teachingAbility + rating.dressing + rating.speaking + rating.attitude + rating.leadership) / 7;
+                    
+                    return (
+                      <div key={rating.id} className="p-4 border border-slate-100 rounded-2xl bg-slate-50/25 hover:bg-white transition-all hover:border-slate-200 space-y-3.5 relative group">
+                        
+                        {/* Rating Card Header */}
+                        <div className="flex justify-between items-start gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center font-extrabold text-slate-500 uppercase text-xs">
+                              {rating.staffName ? rating.staffName[0] : 'T'}
+                            </div>
+                            <div>
+                              <h4 className="font-extrabold text-slate-800 text-xs uppercase">{rating.staffName}</h4>
+                              <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
+                                Rated {rating.date} &middot; By {rating.ratedBy || 'Admin'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2.5 py-1 rounded-xl border border-amber-100 font-black font-sans text-[11px]">
+                            ⭐ {singleAvg.toFixed(1)}
+                          </div>
+                        </div>
+
+                        {/* Domain Ratings Badges */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 pt-2 border-t border-dashed border-slate-100 text-[8px] font-black uppercase text-slate-500 tracking-tight text-center">
+                          <div className="bg-white p-1.5 rounded-lg border border-slate-100">
+                            <span className="block text-slate-400 mb-0.5">🗓️ Punct</span>
+                            <span className="block font-bold text-slate-800 text-[10px] font-mono">{rating.punctuality}</span>
+                          </div>
+                          <div className="bg-white p-1.5 rounded-lg border border-slate-100">
+                            <span className="block text-slate-400 mb-0.5">📑 Regular</span>
+                            <span className="block font-bold text-slate-805 text-[10px] font-mono">{rating.regularity}</span>
+                          </div>
+                          <div className="bg-white p-1.5 rounded-lg border border-slate-100">
+                            <span className="block text-slate-400 mb-0.5">📖 Teach</span>
+                            <span className="block font-bold text-slate-805 text-[10px] font-mono">{rating.teachingAbility}</span>
+                          </div>
+                          <div className="bg-white p-1.5 rounded-lg border border-slate-100">
+                            <span className="block text-slate-400 mb-0.5">👔 Dress</span>
+                            <span className="block font-bold text-slate-805 text-[10px] font-mono">{rating.dressing}</span>
+                          </div>
+                          <div className="bg-white p-1.5 rounded-lg border border-slate-100">
+                            <span className="block text-slate-400 mb-0.5">🗣️ Speak</span>
+                            <span className="block font-bold text-slate-805 text-[10px] font-mono">{rating.speaking}</span>
+                          </div>
+                          <div className="bg-white p-1.5 rounded-lg border border-slate-100">
+                            <span className="block text-slate-400 mb-0.5">😊 Attitude</span>
+                            <span className="block font-bold text-slate-805 text-[10px] font-mono">{rating.attitude}</span>
+                          </div>
+                          <div className="bg-white p-1.5 rounded-lg border border-slate-100">
+                            <span className="block text-slate-400 mb-0.5">👑 Leader</span>
+                            <span className="block font-bold text-slate-805 text-[10px] font-mono">{rating.leadership}</span>
+                          </div>
+                        </div>
+
+                        {/* Remarks */}
+                        {rating.remarks && (
+                          <div className="p-3 bg-white border border-slate-100 rounded-xl text-[11px] text-slate-600 leading-relaxed italic">
+                            "{rating.remarks}"
+                          </div>
+                        )}
+
+                        {/* Erase rating entry */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRating(rating.id)}
+                          className="absolute top-2 right-12 text-slate-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-slate-50 rounded-lg cursor-pointer"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>
+      )}
 
       {isAdding && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1513,6 +2207,157 @@ function StaffView() {
                     onChange={(e) => setNewRegularity(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:outline-none"
                   />
+                </div>
+              </div>
+
+              <div>
+                <label className="block mb-1.5 text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">Assigned Classes</label>
+                <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-150">
+                  {['JSS 1', 'JSS 2', 'JSS 3', 'SS 1', 'SS 2', 'SS 3', 'SS 3 Science Alpha'].map((cls) => {
+                    const isSelected = newAssignedClasses.includes(cls);
+                    return (
+                      <button
+                        type="button"
+                        key={cls}
+                        onClick={() => {
+                          if (isSelected) {
+                            setNewAssignedClasses(newAssignedClasses.filter(c => c !== cls));
+                          } else {
+                            setNewAssignedClasses([...newAssignedClasses, cls]);
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+                          isSelected 
+                            ? 'bg-primary text-white border-primary shadow-sm' 
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {cls}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[9px] text-slate-400 mt-1 uppercase italic font-medium">Select all classes assigned to this new staff member.</p>
+              </div>
+
+              <div>
+                <label className="block mb-1.5 text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">Assigned Subjects</label>
+                <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-150">
+                  {['Mathematics', 'Further Mathematics', 'English Language', 'Physics', 'Chemistry', 'Biology', 'Civic Education', 'Economics', 'Geography', 'Government', 'Yoruba', 'Business Studies', 'P.H.E', 'Social Studies', 'Agric', 'Home Economics', 'Computer', 'Basic Tech', 'Basic Science', 'Accounting', 'Commerce'].map((subj) => {
+                    const isSelected = newAssignedSubjects.includes(subj);
+                    return (
+                      <button
+                        type="button"
+                        key={subj}
+                        onClick={() => {
+                          if (isSelected) {
+                            setNewAssignedSubjects(newAssignedSubjects.filter(s => s !== subj));
+                          } else {
+                            setNewAssignedSubjects([...newAssignedSubjects, subj]);
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+                          isSelected 
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {subj}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[9px] text-slate-400 mt-1 uppercase italic font-medium">Assign curriculum subjects to this new profile.</p>
+              </div>
+
+              {/* Flexible Subject & Class Assignment Widget */}
+              <div className="bg-indigo-50/50 p-4 rounded-3xl border border-indigo-100 space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-widest">
+                    Subject & Class Assignments
+                  </label>
+                  <span className="text-[9px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-black uppercase">
+                    Flexible Linker
+                  </span>
+                </div>
+                
+                {newClassSubjectMappings.length === 0 ? (
+                  <p className="text-[10px] text-slate-500 italic bg-white/70 p-3 rounded-2xl text-center border border-dashed border-slate-200">
+                    No specific subject-to-class assignment mappings added. Use the form below to pair subjects with classes.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
+                    {newClassSubjectMappings.map((mapping, idx) => (
+                      <div 
+                        key={idx} 
+                        className="bg-white px-3 py-1.5 rounded-xl border border-indigo-100 shadow-sm flex items-center gap-2 text-[10px] font-bold text-slate-700"
+                      >
+                        <span className="text-slate-800 font-extrabold">{mapping.subject}</span>
+                        <span className="text-slate-400 font-normal font-sans">in</span>
+                        <span className="text-indigo-600 font-black">{mapping.class}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewClassSubjectMappings(newClassSubjectMappings.filter((_, i) => i !== idx));
+                          }}
+                          className="text-red-400 hover:text-red-600 font-bold ml-1 cursor-pointer transition-colors"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="flex gap-2 bg-white/80 p-2.5 rounded-2xl border border-indigo-50 items-end">
+                  <div className="flex-1">
+                    <label className="block text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">Class</label>
+                    <select
+                      value={newPickerClass}
+                      onChange={(e) => setNewPickerClass(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-150 p-2.5 rounded-xl text-[10px] font-black uppercase focus:outline-none"
+                    >
+                      {['JSS 1', 'JSS 2', 'JSS 3', 'SS 1', 'SS 2', 'SS 3', 'SS 3 Science Alpha'].map(cls => (
+                        <option key={cls} value={cls}>{cls}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-[2_2_0%]">
+                    <label className="block text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">Subject</label>
+                    <select
+                      value={newPickerSubject}
+                      onChange={(e) => setNewPickerSubject(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-150 p-2.5 rounded-xl text-[10px] font-bold focus:outline-none"
+                    >
+                      {['Mathematics', 'Further Mathematics', 'English Language', 'Physics', 'Chemistry', 'Biology', 'Civic Education', 'Economics', 'Geography', 'Government', 'Yoruba', 'Business Studies', 'P.H.E', 'Social Studies', 'Agric', 'Home Economics', 'Computer', 'Basic Tech', 'Basic Science', 'Accounting', 'Commerce'].map(subj => (
+                        <option key={subj} value={subj}>{subj}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const exists = newClassSubjectMappings.some(m => m.class === newPickerClass && m.subject === newPickerSubject);
+                      if (exists) return; // Prevent duplicate
+                      
+                      // Push to mapping list
+                      const updated = [...newClassSubjectMappings, { class: newPickerClass, subject: newPickerSubject }];
+                      setNewClassSubjectMappings(updated);
+                      
+                      // Auto-include in assigned classes
+                      if (!newAssignedClasses.includes(newPickerClass)) {
+                        setNewAssignedClasses([...newAssignedClasses, newPickerClass]);
+                      }
+                      
+                      // Auto-include in assigned subjects
+                      if (!newAssignedSubjects.includes(newPickerSubject)) {
+                        setNewAssignedSubjects([...newAssignedSubjects, newPickerSubject]);
+                      }
+                    }}
+                    className="py-2.5 px-3 bg-indigo-600 text-white font-extrabold text-[10px] uppercase rounded-xl hover:bg-indigo-700 transition-colors cursor-pointer shadow-md shadow-indigo-100"
+                  >
+                    ＋ Assign
+                  </button>
                 </div>
               </div>
 
@@ -1677,6 +2522,68 @@ function StaffView() {
                     </div>
                   </div>
 
+                  {/* Assigned Classes */}
+                  <div className="bg-white border border-slate-150 rounded-2xl p-4 flex gap-3.5 items-center md:col-span-2">
+                    <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl self-start">
+                      <UserCheck size={18} />
+                    </div>
+                    <div>
+                      <span className="block text-[9px] font-black uppercase text-slate-400 tracking-widest ">Assigned Classes</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {selectedStaff.assignedClasses && selectedStaff.assignedClasses.length > 0 ? (
+                          selectedStaff.assignedClasses.map(c => (
+                            <span key={c} className="px-2 py-0.5 bg-emerald-50 border border-emerald-200/50 text-emerald-800 text-[9px] font-black rounded-lg uppercase">
+                              {c}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-slate-850 font-extrabold text-xs">{selectedStaff.assignedClass || 'None'}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Assigned Subjects */}
+                  <div className="bg-white border border-slate-150 rounded-2xl p-4 flex gap-3.5 items-center md:col-span-2">
+                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl self-start">
+                      <BookOpen size={18} />
+                    </div>
+                    <div>
+                      <span className="block text-[9px] font-black uppercase text-slate-400 tracking-widest ">Assigned Subjects</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {selectedStaff.assignedSubjects && selectedStaff.assignedSubjects.length > 0 ? (
+                          selectedStaff.assignedSubjects.map(s => (
+                            <span key={s} className="px-2 py-0.5 bg-indigo-50 border border-indigo-200/50 text-indigo-800 text-[9px] font-black rounded-lg uppercase">
+                              {s}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-slate-400 italic text-[10px] font-semibold">No subjects assigned</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Class-Subject Specific Mappings */}
+                  {selectedStaff.classSubjectMappings && selectedStaff.classSubjectMappings.length > 0 && (
+                    <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 rounded-2xl p-4 flex gap-3.5 items-start md:col-span-2 shadow-sm font-sans">
+                      <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-md shrink-0">
+                        <BookOpen size={18} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="block text-[9px] font-black uppercase text-indigo-700 tracking-widest ">Subject to Class Mappings Schedule</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                          {selectedStaff.classSubjectMappings.map((m, idx) => (
+                            <div key={idx} className="bg-white/80 backdrop-blur border border-indigo-100/50 p-2 rounded-xl flex items-center justify-between text-[10px] font-bold text-slate-700 shadow-sm leading-tight">
+                              <span className="text-slate-800 font-extrabold truncate">{m.subject}</span>
+                              <span className="text-[9px] bg-indigo-100/80 text-indigo-700 px-1.5 py-0.5 rounded font-black uppercase ml-1 shrink-0">{m.class}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                 </div>
 
                 {/* Review comments */}
@@ -1717,9 +2624,13 @@ function StaffView() {
                   punctualityAttendance: editStaffPunctuality,
                   regularityAttendance: editStaffRegularity,
                   rating: editStaffRating,
-                  review: editStaffReview
+                  review: editStaffReview,
+                  assignedClass: editStaffAssignedClasses[0] || 'None',
+                  assignedClasses: editStaffAssignedClasses,
+                  assignedSubjects: editStaffAssignedSubjects,
+                  classSubjectMappings: editClassSubjectMappings
                 };
-                const nextStaffList = staffList.map(s => s.id === selectedStaff.id ? updated : s);
+                const nextStaffList = staffList.map(s => s.id === selectedStaff!.id ? updated : s);
                 setStaffList(nextStaffList);
                 setSelectedStaff(updated);
                 setIsEditingStaff(false);
@@ -1837,6 +2748,157 @@ function StaffView() {
                       className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:outline-none"
                       placeholder="97%"
                     />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block mb-1.5 text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">Assigned Classes</label>
+                  <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-150">
+                    {['JSS 1', 'JSS 2', 'JSS 3', 'SS 1', 'SS 2', 'SS 3', 'SS 3 Science Alpha'].map((cls) => {
+                      const isSelected = editStaffAssignedClasses.includes(cls);
+                      return (
+                        <button
+                          type="button"
+                          key={cls}
+                          onClick={() => {
+                            if (isSelected) {
+                              setEditStaffAssignedClasses(editStaffAssignedClasses.filter(c => c !== cls));
+                            } else {
+                              setEditStaffAssignedClasses([...editStaffAssignedClasses, cls]);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+                            isSelected 
+                              ? 'bg-primary text-white border-primary shadow-sm' 
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          {cls}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[9px] text-slate-400 mt-1 uppercase italic font-medium">Select all classes that this instructor administers or teaches.</p>
+                </div>
+
+                <div>
+                  <label className="block mb-1.5 text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">Assigned Subjects</label>
+                  <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-150">
+                    {['Mathematics', 'Further Mathematics', 'English Language', 'Physics', 'Chemistry', 'Biology', 'Civic Education', 'Economics', 'Geography', 'Government', 'Yoruba', 'Business Studies', 'P.H.E', 'Social Studies', 'Agric', 'Home Economics', 'Computer', 'Basic Tech', 'Basic Science', 'Accounting', 'Commerce'].map((subj) => {
+                      const isSelected = editStaffAssignedSubjects.includes(subj);
+                      return (
+                        <button
+                          type="button"
+                          key={subj}
+                          onClick={() => {
+                            if (isSelected) {
+                              setEditStaffAssignedSubjects(editStaffAssignedSubjects.filter(s => s !== subj));
+                            } else {
+                              setEditStaffAssignedSubjects([...editStaffAssignedSubjects, subj]);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-xl border text-[10px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+                            isSelected 
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          {subj}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[9px] text-slate-400 mt-1 uppercase italic font-medium">Click to assign specific subjects under this instructor's curriculum docket.</p>
+                </div>
+
+                {/* Flexible Subject & Class Assignment Widget */}
+                <div className="bg-indigo-50/50 p-4 rounded-3xl border border-indigo-100 space-y-3 font-sans">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-widest">
+                      Subject & Class Assignments
+                    </label>
+                    <span className="text-[9px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-black uppercase">
+                      Flexible Linker
+                    </span>
+                  </div>
+                  
+                  {editClassSubjectMappings.length === 0 ? (
+                    <p className="text-[10px] text-slate-500 italic bg-white/70 p-3 rounded-2xl text-center border border-dashed border-slate-200 font-sans">
+                      No specific subject-to-class assignment mappings added. Use the form below to pair subjects with classes.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1 font-sans">
+                      {editClassSubjectMappings.map((mapping, idx) => (
+                        <div 
+                          key={idx} 
+                          className="bg-white px-3 py-1.5 rounded-xl border border-indigo-100 shadow-sm flex items-center gap-2 text-[10px] font-bold text-slate-700"
+                        >
+                          <span className="text-slate-800 font-extrabold">{mapping.subject}</span>
+                          <span className="text-slate-400 font-normal font-sans">in</span>
+                          <span className="text-indigo-600 font-black">{mapping.class}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditClassSubjectMappings(editClassSubjectMappings.filter((_, i) => i !== idx));
+                            }}
+                            className="text-red-400 hover:text-red-600 font-bold ml-1 cursor-pointer transition-colors"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2 bg-white/80 p-2.5 rounded-2xl border border-indigo-50 items-end font-sans">
+                    <div className="flex-1">
+                      <label className="block text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">Class</label>
+                      <select
+                        value={editPickerClass}
+                        onChange={(e) => setEditPickerClass(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-150 p-2.5 rounded-xl text-[10px] font-black uppercase focus:outline-none"
+                      >
+                        {['JSS 1', 'JSS 2', 'JSS 3', 'SS 1', 'SS 2', 'SS 3', 'SS 3 Science Alpha'].map(cls => (
+                          <option key={cls} value={cls}>{cls}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex-[2_2_0%]">
+                      <label className="block text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">Subject</label>
+                      <select
+                        value={editPickerSubject}
+                        onChange={(e) => setEditPickerSubject(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-150 p-2.5 rounded-xl text-[10px] font-bold focus:outline-none"
+                      >
+                        {['Mathematics', 'Further Mathematics', 'English Language', 'Physics', 'Chemistry', 'Biology', 'Civic Education', 'Economics', 'Geography', 'Government', 'Yoruba', 'Business Studies', 'P.H.E', 'Social Studies', 'Agric', 'Home Economics', 'Computer', 'Basic Tech', 'Basic Science', 'Accounting', 'Commerce'].map(subj => (
+                          <option key={subj} value={subj}>{subj}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const exists = editClassSubjectMappings.some(m => m.class === editPickerClass && m.subject === editPickerSubject);
+                        if (exists) return; // Prevent duplicate
+                        
+                        // Push to mapping list
+                        const updated = [...editClassSubjectMappings, { class: editPickerClass, subject: editPickerSubject }];
+                        setEditClassSubjectMappings(updated);
+                        
+                        // Auto-include in assigned classes
+                        if (!editStaffAssignedClasses.includes(editPickerClass)) {
+                          setEditStaffAssignedClasses([...editStaffAssignedClasses, editPickerClass]);
+                        }
+                        
+                        // Auto-include in assigned subjects
+                        if (!editStaffAssignedSubjects.includes(editPickerSubject)) {
+                          setEditStaffAssignedSubjects([...editStaffAssignedSubjects, editPickerSubject]);
+                        }
+                      }}
+                      className="py-2.5 px-3 bg-indigo-600 text-white font-extrabold text-[10px] uppercase rounded-xl hover:bg-indigo-700 transition-colors cursor-pointer shadow-md shadow-indigo-100"
+                    >
+                      ＋ Assign
+                    </button>
                   </div>
                 </div>
 

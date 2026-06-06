@@ -13,6 +13,7 @@ import {
   Award
 } from 'lucide-react';
 import ImageUploader from '../../../components/ImageUploader';
+import { useAuth } from '../../../contexts/AuthContext';
 
 interface AttendanceLog {
   date: string;
@@ -33,8 +34,10 @@ interface ExcuseDutyRequest {
 }
 
 export default function AttendanceTrackerStudent() {
+  const { profile } = useAuth();
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [excuseRequests, setExcuseRequests] = useState<ExcuseDutyRequest[]>([]);
+  const [activeStudentId, setActiveStudentId] = useState('STD-2026-001');
   
   // Form submission state
   const [reqDate, setReqDate] = useState('');
@@ -46,45 +49,55 @@ export default function AttendanceTrackerStudent() {
   const [activeTab, setActiveTab] = useState<'calendar' | 'excuse'>('calendar');
 
   useEffect(() => {
-    // Read from localStorage or write fallbacks
-    const savedLogs = localStorage.getItem('ff_attendance_student_logs');
-    const savedReqs = localStorage.getItem('ff_attendance_student_requests');
+    import('../../../lib/sync').then(({ syncFetchStudents }) => {
+      syncFetchStudents().then(students => {
+        const student = students.find((s: any) => 
+          s.email?.toLowerCase() === profile?.email?.toLowerCase() || 
+          s.parentEmail?.toLowerCase() === profile?.email?.toLowerCase()
+        );
+        const resolvedId = student?.id || 'STD-2026-001';
+        setActiveStudentId(resolvedId);
 
-    if (savedLogs) {
-      setLogs(JSON.parse(savedLogs));
-    } else {
-      const defaultLogs: AttendanceLog[] = [
-        { date: '2026-06-01', day: 'Monday', status: 'early', timestamp: '07:44 AM', remark: 'Perfect punctuality record' },
-        { date: '2026-06-02', day: 'Tuesday', status: 'early', timestamp: '07:38 AM', remark: 'Arrived for Devotions early' },
-        { date: '2026-06-03', day: 'Wednesday', status: 'late', timestamp: '08:12 AM', remark: 'Traffic delays at ringroad' },
-        { date: '2026-05-28', day: 'Thursday', status: 'excused', timestamp: '--', remark: 'Approved excuse duty' },
-        { date: '2026-05-29', day: 'Friday', status: 'absent', timestamp: '--', remark: 'Unexcused absentee report' },
-        { date: '2026-05-25', day: 'Monday', status: 'early', timestamp: '07:41 AM', remark: 'Early sign in verified' },
-        { date: '2026-05-26', day: 'Tuesday', status: 'early', timestamp: '07:45 AM', remark: 'On time' },
-        { date: '2026-05-27', day: 'Wednesday', status: 'early', timestamp: '07:35 AM', remark: 'Perfect punctuality record' },
-      ];
-      setLogs(defaultLogs);
-      localStorage.setItem('ff_attendance_student_logs', JSON.stringify(defaultLogs));
-    }
+        const savedLogs = localStorage.getItem(`ff_attendance_student_logs_${resolvedId}`) || localStorage.getItem('ff_attendance_student_logs');
+        const savedReqs = localStorage.getItem(`ff_attendance_student_requests_${resolvedId}`) || localStorage.getItem('ff_attendance_student_requests');
 
-    if (savedReqs) {
-      setExcuseRequests(JSON.parse(savedReqs));
-    } else {
-      const defaultReqs: ExcuseDutyRequest[] = [
-        {
-          id: 'EXC-2001',
-          dateOfAbsence: '2026-05-28',
-          reason: 'Medical Dental Checkup',
-          details: 'Had to visit the general hospital to pull a wisdom tooth under medical anesthesia.',
-          status: 'approved',
-          requestDate: '2026-05-27',
-          uploadedReceipt: 'hospital_referral_checkup.pdf'
+        if (savedLogs) {
+          setLogs(JSON.parse(savedLogs));
+        } else {
+          const defaultLogs: AttendanceLog[] = [
+            { date: '2026-06-01', day: 'Monday', status: 'early', timestamp: '07:44 AM', remark: 'Perfect punctuality record' },
+            { date: '2026-06-02', day: 'Tuesday', status: 'early', timestamp: '07:38 AM', remark: 'Arrived for Devotions early' },
+            { date: '2026-06-03', day: 'Wednesday', status: 'late', timestamp: '08:12 AM', remark: 'Traffic delays at ringroad' },
+            { date: '2026-05-28', day: 'Thursday', status: 'excused', timestamp: '--', remark: 'Approved excuse duty' },
+            { date: '2026-05-29', day: 'Friday', status: 'absent', timestamp: '--', remark: 'Unexcused absentee report' },
+            { date: '2026-05-25', day: 'Monday', status: 'early', timestamp: '07:41 AM', remark: 'Early sign in verified' },
+            { date: '2026-05-26', day: 'Tuesday', status: 'early', timestamp: '07:45 AM', remark: 'On time' },
+            { date: '2026-05-27', day: 'Wednesday', status: 'early', timestamp: '07:35 AM', remark: 'Perfect punctuality record' },
+          ];
+          setLogs(defaultLogs);
+          localStorage.setItem(`ff_attendance_student_logs_${resolvedId}`, JSON.stringify(defaultLogs));
         }
-      ];
-      setExcuseRequests(defaultReqs);
-      localStorage.setItem('ff_attendance_student_requests', JSON.stringify(defaultReqs));
-    }
-  }, []);
+
+        if (savedReqs) {
+          setExcuseRequests(JSON.parse(savedReqs));
+        } else {
+          const defaultReqs: ExcuseDutyRequest[] = [
+            {
+              id: 'EXC-2001',
+              dateOfAbsence: '2026-05-28',
+              reason: 'Medical Dental Checkup',
+              details: 'Had to visit the general hospital to pull a wisdom tooth under medical anesthesia.',
+              status: 'approved',
+              requestDate: '2026-05-27',
+              uploadedReceipt: 'hospital_referral_checkup.pdf'
+            }
+          ];
+          setExcuseRequests(defaultReqs);
+          localStorage.setItem(`ff_attendance_student_requests_${resolvedId}`, JSON.stringify(defaultReqs));
+        }
+      });
+    });
+  }, [profile]);
 
   const handleDocumentUploaded = (url: string) => {
     setAttachedDoc(url);
@@ -105,6 +118,7 @@ export default function AttendanceTrackerStudent() {
 
     const updated = [newRequest, ...excuseRequests];
     setExcuseRequests(updated);
+    localStorage.setItem(`ff_attendance_student_requests_${activeStudentId}`, JSON.stringify(updated));
     localStorage.setItem('ff_attendance_student_requests', JSON.stringify(updated));
 
     setSuccessMsg('Your excuse duty ticket has been successfully transmitted to the Principal’s office for review!');

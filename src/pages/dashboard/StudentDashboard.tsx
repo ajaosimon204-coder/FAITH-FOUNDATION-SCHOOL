@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import Communications from './Communications';
+import CloudLocker from './CloudLocker';
 import ReportCard from './student/ReportCard';
 import LearningHub from './student/LearningHub';
 import PaymentsPortal from './student/PaymentsPortal';
@@ -194,6 +195,7 @@ export default function StudentDashboard() {
         <Route path="/awards" element={<AwardsAchievements />} />
         <Route path="/cbt" element={<CbtExam />} />
         <Route path="/communications" element={<Communications />} />
+        <Route path="/locker" element={<CloudLocker />} />
       </Routes>
     </div>
   );

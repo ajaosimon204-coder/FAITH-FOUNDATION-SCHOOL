@@ -285,14 +285,18 @@ export interface StaffRecord {
   role: string;
   email: string;
   phone: string;
-  photoUrl: string;
-  dateOfAppointment: string;
-  salary: string;
-  award: string;
-  punctualityAttendance: string;
-  regularityAttendance: string;
-  rating: string;
-  review: string;
+  photoUrl?: string;
+  dateOfAppointment?: string;
+  salary?: string;
+  award?: string;
+  punctualityAttendance?: string;
+  regularityAttendance?: string;
+  rating?: string;
+  review?: string;
+  assignedClass?: string;
+  assignedClasses?: string[];
+  assignedSubjects?: string[];
+  classSubjectMappings?: { class: string; subject: string }[];
 }
 
 export async function syncFetchStaff(): Promise<StaffRecord[]> {
@@ -305,25 +309,65 @@ export async function syncFetchStaff(): Promise<StaffRecord[]> {
   }
 
   try {
-    const { data, error } = await supabase.from('teachers').select('*');
+    const { data: dbTeachers, error } = await supabase.from('teachers').select('*');
     if (error) throw error;
 
-    if (data && data.length > 0) {
-      const records: StaffRecord[] = data.map(d => ({
-        id: d.id,
-        name: d.name,
-        role: d.role,
-        email: d.email,
-        phone: d.phone || '',
-        photoUrl: d.photo_url || '',
-        dateOfAppointment: d.date_of_appointment || '',
-        salary: d.salary || '',
-        award: d.award || '',
-        punctualityAttendance: d.punctuality_attendance || '',
-        regularityAttendance: d.regularity_attendance || '',
-        rating: d.rating || '5.0',
-        review: d.review || ''
-      }));
+    let assignments: Record<string, string> = {};
+    try {
+      const { data: siteData } = await supabase
+        .from('site')
+        .select('content')
+        .eq('id', 'teachers_class_assignments')
+        .single();
+      if (siteData?.content) {
+        assignments = siteData.content as Record<string, string>;
+      }
+    } catch (e) {
+      console.warn('Could not load class assignments from site table:', e);
+    }
+
+    let richAssignments: Record<string, { classes: string[], subjects: string[] }> = {};
+    try {
+      const { data: richSiteData } = await supabase
+        .from('site')
+        .select('content')
+        .eq('id', 'teachers_assignments_metadata')
+        .single();
+      if (richSiteData?.content) {
+        richAssignments = richSiteData.content as Record<string, { classes: string[], subjects: string[] }>;
+      }
+    } catch (e) {
+      console.warn('Could not load rich assignments:', e);
+    }
+
+    if (dbTeachers && dbTeachers.length > 0) {
+      const records: StaffRecord[] = dbTeachers.map(d => {
+        const metadata = richAssignments[d.id] || { classes: [], subjects: [], classSubjectMappings: [] };
+        const legacyClass = assignments[d.id] || 'None';
+        let finalClasses = metadata.classes || [];
+        if (finalClasses.length === 0 && legacyClass && legacyClass !== 'None') {
+          finalClasses = [legacyClass];
+        }
+        return {
+          id: d.id,
+          name: d.name,
+          role: d.role,
+          email: d.email,
+          phone: d.phone || '',
+          photoUrl: d.photo_url || '',
+          dateOfAppointment: d.date_of_appointment || '',
+          salary: d.salary || '',
+          award: d.award || '',
+          punctualityAttendance: d.punctuality_attendance || '',
+          regularityAttendance: d.regularity_attendance || '',
+          rating: d.rating || '5.0',
+          review: d.review || '',
+          assignedClass: legacyClass,
+          assignedClasses: finalClasses,
+          assignedSubjects: metadata.subjects || [],
+          classSubjectMappings: (metadata as any).classSubjectMappings || []
+        };
+      });
       localStorage.setItem(localKey, JSON.stringify(records));
       return records;
     }
@@ -361,6 +405,30 @@ export async function syncSaveStaffMember(member: StaffRecord): Promise<void> {
       rating: member.rating,
       review: member.review
     });
+
+    const assignments: Record<string, string> = {};
+    const richAssignments: Record<string, { classes: string[], subjects: string[], classSubjectMappings?: any[] }> = {};
+    
+    updatedList.forEach(t => {
+      if (t.assignedClass) {
+        assignments[t.id] = t.assignedClass;
+      }
+      richAssignments[t.id] = {
+        classes: t.assignedClasses || (t.assignedClass && t.assignedClass !== 'None' ? [t.assignedClass] : []),
+        subjects: t.assignedSubjects || [],
+        classSubjectMappings: t.classSubjectMappings || []
+      };
+    });
+
+    await supabase.from('site').upsert({
+      id: 'teachers_class_assignments',
+      content: assignments
+    });
+
+    await supabase.from('site').upsert({
+      id: 'teachers_assignments_metadata',
+      content: richAssignments
+    });
   } catch (err) {
     console.error('Sync save teacher failed:', err);
   }
@@ -390,6 +458,30 @@ export async function syncSaveStaffList(list: StaffRecord[]): Promise<void> {
         review: t.review
       });
     }
+
+    const assignments: Record<string, string> = {};
+    const richAssignments: Record<string, { classes: string[], subjects: string[], classSubjectMappings?: any[] }> = {};
+    
+    list.forEach(t => {
+      if (t.assignedClass) {
+        assignments[t.id] = t.assignedClass;
+      }
+      richAssignments[t.id] = {
+        classes: t.assignedClasses || (t.assignedClass && t.assignedClass !== 'None' ? [t.assignedClass] : []),
+        subjects: t.assignedSubjects || [],
+        classSubjectMappings: t.classSubjectMappings || []
+      };
+    });
+
+    await supabase.from('site').upsert({
+      id: 'teachers_class_assignments',
+      content: assignments
+    });
+
+    await supabase.from('site').upsert({
+      id: 'teachers_assignments_metadata',
+      content: richAssignments
+    });
   } catch (err) {
     console.error('Sync save staff list failed:', err);
   }
@@ -656,7 +748,7 @@ export async function syncSaveAdmissions(list: AdmissionApplication[]): Promise<
         student_name: a.studentName,
         parent_name: a.parentName,
         email: a.email,
-        parent_phone: a.parentPhone || a.phone,
+        parent_phone: a.phone,
         target_class: a.targetClass,
         address: a.address,
         previous_school: a.previousSchool || '',
@@ -804,7 +896,188 @@ export async function syncSaveLectureNote(note: LectureNote): Promise<void> {
 }
 
 // ==========================================
-// 9. RE-USABLE DB BROADCAST MECHANISM
+// 8. REPORT CARDS SYNC
+// ==========================================
+export async function syncFetchReportCardsMap(): Promise<Record<string, any>> {
+  const localKey = 'ff_student_report_cards_map';
+  const localSaved = localStorage.getItem(localKey);
+  const fallback = localSaved ? JSON.parse(localSaved) : {};
+
+  if (isSandbox() || !isSupabaseConfigured) {
+    return fallback;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('site')
+      .select('content')
+      .eq('id', 'student_report_cards')
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        await supabase.from('site').upsert({ id: 'student_report_cards', content: fallback });
+        return fallback;
+      }
+      throw error;
+    }
+
+    if (data?.content) {
+      const map = data.content as Record<string, any>;
+      localStorage.setItem(localKey, JSON.stringify(map));
+      return map;
+    }
+    return fallback;
+  } catch (err) {
+    console.warn('Sync fetch report cards map failed, using local fallback:', err);
+    return fallback;
+  }
+}
+
+export async function syncSaveReportCardsMap(map: Record<string, any>): Promise<void> {
+  const localKey = 'ff_student_report_cards_map';
+  localStorage.setItem(localKey, JSON.stringify(map));
+
+  if (isSandbox() || !isSupabaseConfigured) return;
+
+  try {
+    await supabase.from('site').upsert({ id: 'student_report_cards', content: map });
+  } catch (err) {
+    console.error('Sync save report cards map failed:', err);
+  }
+}
+
+// ==========================================
+// 9. CLOUD FILES & DOCUMENTS SYNC
+// ==========================================
+export interface CloudFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string; // base64 encoded string or raw asset URL
+  uploadedAt: string;
+  uploadedBy: string;
+}
+
+export async function syncFetchCloudFiles(): Promise<CloudFile[]> {
+  const localKey = 'ff_cloud_locker_files';
+  const saved = localStorage.getItem(localKey);
+  const fallback = saved ? JSON.parse(saved) : [];
+
+  if (isSandbox() || !isSupabaseConfigured) return fallback;
+
+  try {
+    const { data, error } = await supabase
+      .from('site')
+      .select('content')
+      .eq('id', 'cloud_locker_files')
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // Document doesn't exist yet, insert empty fallback
+        await supabase.from('site').upsert({ id: 'cloud_locker_files', content: fallback });
+        return fallback;
+      }
+      throw error;
+    }
+
+    if (data?.content) {
+      const list = data.content as CloudFile[];
+      localStorage.setItem(localKey, JSON.stringify(list));
+      return list;
+    }
+    return fallback;
+  } catch (err) {
+    console.warn('Sync fetch cloud files failed, using local fallback:', err);
+    return fallback;
+  }
+}
+
+export async function syncSaveCloudFiles(list: CloudFile[]): Promise<void> {
+  const localKey = 'ff_cloud_locker_files';
+  localStorage.setItem(localKey, JSON.stringify(list));
+
+  if (isSandbox() || !isSupabaseConfigured) return;
+
+  try {
+    await supabase.from('site').upsert({ id: 'cloud_locker_files', content: list });
+  } catch (err) {
+    console.error('Sync save cloud files failed:', err);
+  }
+}
+
+// ==========================================
+// 11. STAFF RATINGS SYNC
+// ==========================================
+export interface StaffDailyRating {
+  id: string;
+  staffId: string;
+  staffName: string;
+  date: string;
+  punctuality: number;
+  regularity: number;
+  teachingAbility: number;
+  dressing: number;
+  speaking: number;
+  attitude: number;
+  leadership: number;
+  remarks?: string;
+  ratedBy?: string;
+  createdAt?: string;
+}
+
+export async function syncFetchStaffRatings(): Promise<StaffDailyRating[]> {
+  const localKey = 'ff_staff_daily_ratings';
+  const saved = localStorage.getItem(localKey);
+  const fallback = saved ? JSON.parse(saved) : [];
+
+  if (isSandbox() || !isSupabaseConfigured) {
+    return fallback;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('site')
+      .select('content')
+      .eq('id', 'staff_daily_ratings')
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        await supabase.from('site').upsert({ id: 'staff_daily_ratings', content: fallback });
+        return fallback;
+      }
+      throw error;
+    }
+
+    if (data?.content) {
+      const list = data.content as StaffDailyRating[];
+      localStorage.setItem(localKey, JSON.stringify(list));
+      return list;
+    }
+  } catch (err) {
+    console.error('Sync fetch staff ratings failed, returning local state:', err);
+  }
+  return fallback;
+}
+
+export async function syncSaveStaffRatings(list: StaffDailyRating[]): Promise<void> {
+  const localKey = 'ff_staff_daily_ratings';
+  localStorage.setItem(localKey, JSON.stringify(list));
+
+  if (isSandbox() || !isSupabaseConfigured) return;
+
+  try {
+    await supabase.from('site').upsert({ id: 'staff_daily_ratings', content: list });
+  } catch (err) {
+    console.error('Sync save staff ratings failed:', err);
+  }
+}
+
+// ==========================================
+// 10. RE-USABLE DB BROADCAST MECHANISM
 // ==========================================
 export async function logSystemActivity(userEmail: string | undefined, action: string, details: string): Promise<void> {
   if (isSandbox() || !isSupabaseConfigured) return;
