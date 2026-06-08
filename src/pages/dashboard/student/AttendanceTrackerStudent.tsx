@@ -37,7 +37,7 @@ export default function AttendanceTrackerStudent() {
   const { profile } = useAuth();
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [excuseRequests, setExcuseRequests] = useState<ExcuseDutyRequest[]>([]);
-  const [activeStudentId, setActiveStudentId] = useState('STD-2026-001');
+  const [activeStudentId, setActiveStudentId] = useState('FFP/2026/001');
   
   // Form submission state
   const [reqDate, setReqDate] = useState('');
@@ -55,7 +55,7 @@ export default function AttendanceTrackerStudent() {
           s.email?.toLowerCase() === profile?.email?.toLowerCase() || 
           s.parentEmail?.toLowerCase() === profile?.email?.toLowerCase()
         );
-        const resolvedId = student?.id || 'STD-2026-001';
+        const resolvedId = student?.id || 'FFP/2026/001';
         setActiveStudentId(resolvedId);
 
         const savedLogs = localStorage.getItem(`ff_attendance_student_logs_${resolvedId}`) || localStorage.getItem('ff_attendance_student_logs');

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../../contexts/AuthContext';
+import { motion } from 'framer-motion';
 import { 
   FileText, 
   Download, 
@@ -8,7 +10,8 @@ import {
   TrendingUp, 
   CheckCircle,
   Clock,
-  UserCheck
+  UserCheck,
+  Lock
 } from 'lucide-react';
 
 interface SubjectGrade {
@@ -20,6 +23,7 @@ interface SubjectGrade {
 }
 
 export default function ReportCard() {
+  const { profile } = useAuth();
   const [term, setTerm] = useState<'1st' | '2nd' | '3rd'>('1st');
   const [reportData, setReportData] = useState<any>(null);
 
@@ -144,6 +148,27 @@ export default function ReportCard() {
       setReportData(defaultData);
     }
   }, []);
+
+  if (profile?.role === 'student' && profile?.reportCardPublished === false) {
+    return (
+      <div className="max-w-xl mx-auto my-12 p-8 bg-amber-50 border border-amber-100 rounded-[32px] text-center space-y-4 shadow-xl shadow-amber-500/5 animate-in fade-in duration-300">
+        <motion.div 
+          initial={{ rotate: -10, scale: 0.9 }}
+          animate={{ rotate: 0, scale: 1 }}
+          className="mx-auto w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center shadow-inner"
+        >
+          <Lock size={28} />
+        </motion.div>
+        <h3 className="text-xl font-bold font-display text-slate-800">Academic Scorecard Reserved</h3>
+        <p className="text-xs text-slate-550 leading-relaxed font-semibold max-w-sm mx-auto">
+          Your continuous assessment progress reports and term results are currently undergoing terminal security checks. Results are made visible once signed by the Registrar.
+        </p>
+        <div className="p-3.5 bg-white/80 border border-slate-100 rounded-2xl max-w-xs mx-auto text-[10px] text-slate-400 font-mono tracking-wider">
+          Audit: SS3-CA-PRE-PUBLISH // Status: Pending Verification
+        </div>
+      </div>
+    );
+  }
 
   if (!reportData) {
     return (

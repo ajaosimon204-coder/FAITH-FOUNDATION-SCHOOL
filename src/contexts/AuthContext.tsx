@@ -8,6 +8,7 @@ interface AuthContextType {
   loading: boolean;
   isSandbox: boolean;
   loginAsDemo: (email: string, role: 'admin' | 'staff' | 'student', fullName: string) => void;
+  loginAsStudent: (student: any) => void;
   logoutDemo: () => void;
   activeRole: 'admin' | 'staff' | 'student';
   switchRole: (role: 'admin' | 'staff' | 'student') => void;
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   isSandbox: false,
   loginAsDemo: () => {},
+  loginAsStudent: () => {},
   logoutDemo: () => {},
   activeRole: 'student',
   switchRole: () => {}
@@ -72,6 +74,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProfile(mockProfile);
     setIsSandbox(true);
     setLoading(false);
+  };
+
+  const loginAsStudent = (student: any) => {
+    localStorage.setItem('ff_admin_active_role', 'student');
+    setActiveRoleOverride('student');
+
+    const realStudentId = student.id;
+    const parentEmail = student.parentEmail || `${student.id}@faithfoundation.edu.ng`;
+    const mockUser = {
+      id: realStudentId,
+      email: parentEmail,
+      created_at: new Date().toISOString(),
+      app_metadata: {},
+      user_metadata: { full_name: student.name, role: 'student' },
+      aud: 'authenticated',
+      role: 'authenticated'
+    } as any as User;
+
+    const studentProfile = {
+      id: realStudentId,
+      studentId: realStudentId,
+      email: parentEmail,
+      full_name: student.name,
+      role: 'student',
+      studentClass: student.class,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      ...student
+    };
+
+    const session = { user: mockUser, profile: studentProfile };
+    localStorage.setItem('faith_foundation_sandbox_session', JSON.stringify(session));
+    setUser(mockUser);
+    setProfile(studentProfile);
+    setIsSandbox(true);
+    setLoading(false);
+
+    // Also sync ff_student_report_card to let dashboards read results correctly
+    const studentReportCardsMapStr = localStorage.getItem('ff_student_report_cards_map');
+    if (studentReportCardsMapStr) {
+      try {
+        const map = JSON.parse(studentReportCardsMapStr);
+        const studentCard = map[student.id];
+        if (studentCard) {
+          localStorage.setItem('ff_student_report_card', JSON.stringify(studentCard));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
   };
 
   const logoutDemo = () => {
@@ -340,7 +392,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, isSandbox]);
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isSandbox, loginAsDemo, logoutDemo, activeRole, switchRole }}>
+    <AuthContext.Provider value={{ user, profile, loading, isSandbox, loginAsDemo, loginAsStudent, logoutDemo, activeRole, switchRole }}>
       {children}
     </AuthContext.Provider>
   );

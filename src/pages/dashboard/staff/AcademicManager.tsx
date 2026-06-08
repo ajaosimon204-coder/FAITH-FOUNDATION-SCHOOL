@@ -715,7 +715,19 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
     if (!newStuName.trim()) return;
 
     try {
-      const newId = `STD-2026-${Math.floor(100 + Math.random() * 900)}`;
+      // Load all students, detect next sequential ID
+      const allStudents = await syncFetchStudents();
+      let newSeq = 1;
+      while (true) {
+        const padded = String(newSeq).padStart(3, '0');
+        const targetId = `FFP/2026/${padded}`;
+        if (!allStudents.some(s => s.id === targetId)) {
+          break;
+        }
+        newSeq++;
+      }
+      const newId = `FFP/2026/${String(newSeq).padStart(3, '0')}`;
+
       const fresh = {
         id: newId,
         name: newStuName,
@@ -733,8 +745,6 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
         communicationLogs: []
       };
 
-      // Load all students, add fresh, save
-      const allStudents = await syncFetchStudents();
       const updatedList = [fresh, ...allStudents];
       await syncSaveStudents(updatedList);
 

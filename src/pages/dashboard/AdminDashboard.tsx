@@ -483,6 +483,16 @@ interface StudentRecord {
   allergies: string;
   academicHistory: { subject: string; score: number; term: string }[];
   communicationLogs: { date: string; message: string; caller: string }[];
+  firstLoginDone?: boolean;
+  portalPasswordHash?: string;
+  portalSalt?: string;
+  securityQuestion?: string;
+  securityAnswerHash?: string;
+  accountDisabled?: boolean;
+  reportCardPublished?: boolean;
+  attendancePublished?: boolean;
+  behavioralPublished?: boolean;
+  loginHistory?: any[];
 }
 
 function StudentsView() {
@@ -490,7 +500,7 @@ function StudentsView() {
     const saved = localStorage.getItem('ff_students');
     return saved ? JSON.parse(saved) : [
       { 
-        id: 'STD-2026-001', 
+        id: 'FFP/2026/001', 
         name: 'Oluwaseun Adewole', 
         class: 'SS 3', 
         status: 'Enrolled', 
@@ -511,7 +521,7 @@ function StudentsView() {
         ]
       },
       { 
-        id: 'STD-2026-002', 
+        id: 'FFP/2026/002', 
         name: 'Chioma Nwachukwu', 
         class: 'JSS 1', 
         status: 'Enrolled', 
@@ -556,7 +566,7 @@ function StudentsView() {
   const [editStu, setEditStu] = useState<StudentRecord | null>(null);
 
   // Sub menu tabs (Academic Marks / Medical Records / Contacts / Communications)
-  const [activeSubTab, setActiveSubTab] = useState<'records' | 'medical' | 'progress' | 'comms'>('records');
+  const [activeSubTab, setActiveSubTab] = useState<'records' | 'medical' | 'progress' | 'comms' | 'portal'>('records');
 
   // Interactive record modifiers (e.g. adding score or communication log)
   const [newSubject, setNewSubject] = useState('');
@@ -575,7 +585,18 @@ function StudentsView() {
     e.preventDefault();
     if (!newStuName.trim()) return;
 
-    const newId = `STD-2026-${Math.floor(100 + Math.random() * 900)}`;
+    // Detect next sequential FFP/2026/001 ID
+    let newSeq = 1;
+    while (true) {
+      const padded = String(newSeq).padStart(3, '0');
+      const targetId = `FFP/2026/${padded}`;
+      if (!students.some(s => s.id === targetId)) {
+        break;
+      }
+      newSeq++;
+    }
+    const newId = `FFP/2026/${String(newSeq).padStart(3, '0')}`;
+
     const fresh: StudentRecord = {
       id: newId,
       name: newStuName,
@@ -590,6 +611,10 @@ function StudentsView() {
       allergies: newStuAllergies,
       photoUrl: newStuPhoto,
       academicHistory: [],
+      firstLoginDone: false,
+      reportCardPublished: true,
+      attendancePublished: true,
+      behavioralPublished: true,
       communicationLogs: []
     };
 
@@ -806,17 +831,18 @@ function StudentsView() {
               </div>
 
               {/* Sub tabs selectors */}
-              <div className="flex border-b border-slate-100 text-center shrink-0">
+              <div className="flex border-b border-slate-100 text-center shrink-0 overflow-x-auto select-none">
                 {[
                   { id: 'records', label: 'File Dossier' },
                   { id: 'medical', label: 'Clinical Files' },
                   { id: 'progress', label: 'Academics' },
-                  { id: 'comms', label: 'Home Alerts' }
+                  { id: 'comms', label: 'Home Alerts' },
+                  { id: 'portal', label: 'Portal Access' }
                 ].map(tab => (
                   <button 
                     key={tab.id}
                     onClick={() => setActiveSubTab(tab.id as any)}
-                    className={`flex-1 py-4 font-bold text-xs uppercase tracking-widest border-b-2 transition-colors ${
+                    className={`flex-1 py-4 px-2 font-bold text-[11px] uppercase tracking-wider border-b-2 transition-colors ${
                       activeSubTab === tab.id 
                         ? 'border-primary text-primary bg-primary/2' 
                         : 'border-transparent text-slate-400 hover:text-slate-650 hover:bg-slate-50/50'
@@ -1040,6 +1066,186 @@ function StudentsView() {
                           </button>
                         </div>
 
+                      </div>
+                    )}
+
+                    {/* PORTAL ACCESS CONTROL & AUDITING */}
+                    {activeSubTab === 'portal' && (
+                      <div className="space-y-6 animate-in fade-in duration-200">
+                        <div className="flex justify-between items-center bg-slate-50 p-4 border border-slate-100 rounded-3xl">
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-widest block">Portal Registration State</span>
+                            <span className={`inline-block mt-1 text-xs font-black uppercase px-2.5 py-1 rounded-full ${
+                              selectedStudent.accountDisabled 
+                                ? 'bg-red-50 text-red-600 border border-red-200' 
+                                : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                            }`}>
+                              {selectedStudent.accountDisabled ? '🛑 Access Suspended' : '✅ Active & Verified'}
+                            </span>
+                          </div>
+
+                          <button
+                            onClick={() => {
+                              const updated = {
+                                ...selectedStudent,
+                                accountDisabled: !selectedStudent.accountDisabled
+                              };
+                              setStudents(students.map(s => s.id === selectedStudent.id ? updated : s));
+                              setSelectedStudent(updated);
+                              showBannerAlert(updated.accountDisabled ? 'Student portal suspended.' : 'Student portal reactivated.');
+                            }}
+                            className={`px-4 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                              selectedStudent.accountDisabled 
+                                ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
+                                : 'bg-red-100 text-red-700 hover:bg-red-200'
+                            }`}
+                          >
+                            {selectedStudent.accountDisabled ? 'Re-enable Access' : 'Suspend Account'}
+                          </button>
+                        </div>
+
+                        {/* Reset and custom passwords */}
+                        <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 space-y-4">
+                          <h4 className="text-slate-800 font-black text-xs uppercase tracking-tight">Credentials Alignment & Password Resets</h4>
+                          <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
+                            Resets reinstate the default parent phone number (<strong>{selectedStudent.parentPhone}</strong>) for access configuration. You can also specify a custom override below.
+                          </p>
+
+                          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                            <button
+                              onClick={() => {
+                                const updated = {
+                                  ...selectedStudent,
+                                  portalPasswordHash: undefined,
+                                  portalSalt: undefined,
+                                  firstLoginDone: false
+                                };
+                                setStudents(students.map(s => s.id === selectedStudent.id ? updated : s));
+                                setSelectedStudent(updated);
+                                showBannerAlert('Student password reset to default parent phone successfully.');
+                              }}
+                              className="px-4 py-3 border border-slate-200 bg-white hover:bg-slate-50 text-slate-705 rounded-xl text-xs uppercase font-black tracking-wider flex-1 transition-all pointer-events-auto"
+                            >
+                              Reset to Default Parent Phone
+                            </button>
+                          </div>
+
+                          {/* Custom Password Set Form */}
+                          <div className="border-t border-slate-100 pt-4 mt-2 space-y-3">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">Set Override Password Directly</span>
+                            <div className="flex gap-2">
+                              <input
+                                id="adminDirectOverridePassword"
+                                type="text"
+                                placeholder="Enter direct plain password..."
+                                className="bg-white border border-slate-200 rounded-xl px-3 text-xs w-full focus:outline-none placeholder:text-slate-400 font-bold"
+                              />
+                              <button
+                                onClick={async () => {
+                                  const el = document.getElementById('adminDirectOverridePassword') as HTMLInputElement;
+                                  const plainVal = el ? el.value.trim() : '';
+                                  if (!plainVal) {
+                                    showBannerAlert('Provide a password string before saving.');
+                                    return;
+                                  }
+                                  if (plainVal.length < 6) {
+                                    showBannerAlert('Passwords must be at least 6 characters.');
+                                    return;
+                                  }
+                                  // Hash it
+                                  const salt = Math.random().toString(36).substring(2, 10);
+                                  const buf = new TextEncoder().encode(plainVal + salt);
+                                  const hash = await crypto.subtle.digest('SHA-256', buf);
+                                  const hexHash = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+                                  const updated = {
+                                    ...selectedStudent,
+                                    portalPasswordHash: hexHash,
+                                    portalSalt: salt,
+                                    firstLoginDone: true
+                                  };
+                                  setStudents(students.map(s => s.id === selectedStudent.id ? updated : s));
+                                  setSelectedStudent(updated);
+                                  if (el) el.value = '';
+                                  showBannerAlert('Override password hashed & applied.');
+                                }}
+                                className="bg-primary hover:bg-opacity-95 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 rounded-xl shrink-0"
+                              >
+                                Commit Override
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Publications Approvals */}
+                        <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 space-y-4">
+                          <h4 className="text-slate-800 font-black text-xs uppercase tracking-tight">Portal Sync & Publication Permissions</h4>
+                          <p className="text-[11px] text-slate-500 leading-relaxed font-semibold">
+                            Control which score dashboards and terminal files are compiled and visible on the student's portal homepage.
+                          </p>
+
+                          <div className="space-y-3.5 pt-2">
+                            {[
+                              { key: 'reportCardPublished', label: 'Continuous Assessment & Report Card Results', desc: 'Allows students to review CA and term rankings' },
+                              { key: 'attendancePublished', label: 'Classroom Daily Attendance Tracker', desc: 'Syncs live presence schedules and excuse approvals' },
+                              { key: 'behavioralPublished', label: 'Behavioral conduct & Affective Logs', desc: 'Permits tracking of school honor conduct points' }
+                            ].map((pubItem) => {
+                              const isPub = selectedStudent[pubItem.key] !== false; // defaults to true if undefined
+                              return (
+                                <div key={pubItem.key} className="flex justify-between items-center bg-white border border-slate-100 p-4 rounded-2xl">
+                                  <div>
+                                    <span className="text-xs font-black text-slate-800 block">{pubItem.label}</span>
+                                    <span className="text-[10px] text-slate-400 mt-0.5 block font-semibold">{pubItem.desc}</span>
+                                  </div>
+
+                                  <button
+                                    onClick={() => {
+                                      const updated = {
+                                        ...selectedStudent,
+                                        [pubItem.key]: !isPub
+                                      };
+                                      setStudents(students.map(s => s.id === selectedStudent.id ? updated : s));
+                                      setSelectedStudent(updated);
+                                      showBannerAlert(`${pubItem.label} status updated.`);
+                                    }}
+                                    className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                                      isPub 
+                                        ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-250' 
+                                        : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-250'
+                                    }`}
+                                  >
+                                    {isPub ? '🟢 Published / Active' : '🟡 Review Mode'}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Recent Login Histroy logs */}
+                        <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 space-y-3">
+                          <h4 className="text-slate-800 font-black text-xs uppercase tracking-tight">Security Login Activity Audit Log</h4>
+                          <span className="text-[11px] text-slate-400 tracking-tight block font-semibold">Auditing active browser sessions, logins and access terminals.</span>
+
+                          <div className="space-y-2 mt-4 max-h-48 overflow-y-auto pr-1">
+                            {selectedStudent.loginHistory && selectedStudent.loginHistory.map((lh: any, idx: number) => (
+                              <div key={idx} className="bg-white border border-slate-100 p-3.5 rounded-2xl flex justify-between items-start text-[11px] font-semibold text-slate-600 shadow-sm">
+                                <div className="space-y-1">
+                                  <p className="font-extrabold text-slate-800 text-xs">{lh.device}</p>
+                                  <p className="text-[10px] text-slate-450 font-mono tracking-wider">{lh.ip}</p>
+                                </div>
+                                <div className="text-right space-y-1 shrink-0">
+                                  <p className="text-primary font-black uppercase tracking-wider text-[9px]">{lh.date}</p>
+                                  <p className="text-[10px] text-slate-400 font-mono">{lh.time}</p>
+                                </div>
+                              </div>
+                            ))}
+
+                            {(!selectedStudent.loginHistory || selectedStudent.loginHistory.length === 0) && (
+                              <p className="text-xs text-slate-400 text-center py-4 italic font-medium">No system login history records logged yet.</p>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )}
 
@@ -2950,11 +3156,11 @@ function FinanceView() {
     const saved = localStorage.getItem('ff_all_student_invoices');
     if (saved) return JSON.parse(saved);
     const defaultInvoices = [
-      { id: 'INV-2026-001', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'STD-2026-999', item: 'First Term Core School Fees (S3 Alpha)', amount: 180000, status: 'paid', dueDate: 'Sep 15, 2025', paidDate: 'Sep 10, 2025', txnRef: 'TXN-9844021-992' },
-      { id: 'INV-2026-002', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'STD-2026-999', item: 'Uniforms & Institutional Sportswear Outfit', amount: 40000, status: 'paid', dueDate: 'Sep 15, 2025', paidDate: 'Sep 11, 2025', txnRef: 'TXN-9844029-411' },
-      { id: 'INV-2026-003', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'STD-2026-999', item: 'SS3 Mock Syllabus Textbook Package Bundle', amount: 35000, status: 'paid', dueDate: 'Oct 01, 2025', paidDate: 'Sep 29, 2025', txnRef: 'TXN-9844118-090' },
-      { id: 'INV-2026-004', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'STD-2026-999', item: 'Second Term Core School Fees (S3 Alpha)', amount: 180000, status: 'paid', dueDate: 'Jan 15, 2026', paidDate: 'Jan 12, 2026', txnRef: 'TXN-9851022-811' },
-      { id: 'INV-2026-005', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'STD-2026-999', item: 'Third Term Academic School Fees (S3 Alpha)', amount: 180000, status: 'unpaid', dueDate: 'Jun 15, 2026' }
+      { id: 'INV-2026-001', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'FFP/2026/999', item: 'First Term Core School Fees (S3 Alpha)', amount: 180000, status: 'paid', dueDate: 'Sep 15, 2025', paidDate: 'Sep 10, 2025', txnRef: 'TXN-9844021-992' },
+      { id: 'INV-2026-002', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'FFP/2026/999', item: 'Uniforms & Institutional Sportswear Outfit', amount: 40000, status: 'paid', dueDate: 'Sep 15, 2025', paidDate: 'Sep 11, 2025', txnRef: 'TXN-9844029-411' },
+      { id: 'INV-2026-003', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'FFP/2026/999', item: 'SS3 Mock Syllabus Textbook Package Bundle', amount: 35000, status: 'paid', dueDate: 'Oct 01, 2025', paidDate: 'Sep 29, 2025', txnRef: 'TXN-9844118-090' },
+      { id: 'INV-2026-004', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'FFP/2026/999', item: 'Second Term Core School Fees (S3 Alpha)', amount: 180000, status: 'paid', dueDate: 'Jan 15, 2026', paidDate: 'Jan 12, 2026', txnRef: 'TXN-9851022-811' },
+      { id: 'INV-2026-005', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'FFP/2026/999', item: 'Third Term Academic School Fees (S3 Alpha)', amount: 180000, status: 'unpaid', dueDate: 'Jun 15, 2026' }
     ];
     localStorage.setItem('ff_all_student_invoices', JSON.stringify(defaultInvoices));
     return defaultInvoices;
@@ -2963,9 +3169,9 @@ function FinanceView() {
   const [students, setStudents] = useState<any[]>(() => {
     const saved = localStorage.getItem('ff_students');
     return saved ? JSON.parse(saved) : [
-      { id: 'STD-2026-999', name: 'Ajao Demola Simon', parentEmail: 'ajaosimon3@gmail.com' },
-      { id: 'STD-2026-441', name: 'Ngozi Obi', parentEmail: 'n.obi@gmail.com' },
-      { id: 'STD-2026-712', name: 'Babajide Cole', parentEmail: 'b.cole@gmail.com' }
+      { id: 'FFP/2026/999', name: 'Ajao Demola Simon', parentEmail: 'ajaosimon3@gmail.com' },
+      { id: 'FFP/2026/441', name: 'Ngozi Obi', parentEmail: 'n.obi@gmail.com' },
+      { id: 'FFP/2026/712', name: 'Babajide Cole', parentEmail: 'b.cole@gmail.com' }
     ];
   });
 
@@ -3014,7 +3220,7 @@ function FinanceView() {
     }
     const target = students.find(s => s.parentEmail === selectedStudentEmail || s.email === selectedStudentEmail);
     const resolvedName = target ? target.name : 'Unknown Pupil';
-    const resolvedId = target ? target.id : `STD-2026-${Math.floor(100 + Math.random() * 900)}`;
+    const resolvedId = target ? target.id : `FFP/2026/${Math.floor(100 + Math.random() * 900)}`;
 
     const freshInvoice = {
       id: `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -3816,7 +4022,18 @@ function AdmissionsView() {
         );
 
         if (!alreadyExists) {
-          const nextId = `STD-2026-${Math.floor(100 + Math.random() * 900)}`;
+          // Detect next sequential FFP/2026/001 ID
+          let newSeq = 1;
+          while (true) {
+            const padded = String(newSeq).padStart(3, '0');
+            const targetId = `FFP/2026/${padded}`;
+            if (!list.some(s => s.id === targetId)) {
+              break;
+            }
+            newSeq++;
+          }
+          const nextId = `FFP/2026/${String(newSeq).padStart(3, '0')}`;
+
           const freshStudent = {
             id: nextId,
             name: targetApplication.student_name,
@@ -3830,6 +4047,10 @@ function AdmissionsView() {
             medicalInfo: `Blood: ${targetApplication.bloodGroup || 'O+'}, Genotype: ${targetApplication.genotype || 'AA'}`,
             allergies: targetApplication.allergies || 'None',
             academicHistory: [],
+            firstLoginDone: false,
+            reportCardPublished: true,
+            attendancePublished: true,
+            behavioralPublished: true,
             communicationLogs: [
               { date: new Date().toLocaleDateString(), message: `Profile initialized from Admissions Pipeline entry: ${id}`, caller: 'System Core' }
             ]

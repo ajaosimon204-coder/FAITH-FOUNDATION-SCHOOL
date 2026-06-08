@@ -87,6 +87,16 @@ export interface StudentRecord {
   academicHistory?: any[];
   communicationLogs?: any[];
   photoUrl?: string;
+  firstLoginDone?: boolean;
+  portalPasswordHash?: string;
+  portalSalt?: string;
+  securityQuestion?: string;
+  securityAnswerHash?: string;
+  accountDisabled?: boolean;
+  reportCardPublished?: boolean;
+  attendancePublished?: boolean;
+  behavioralPublished?: boolean;
+  loginHistory?: any[];
 }
 
 export async function syncFetchStudents(): Promise<StudentRecord[]> {
@@ -94,13 +104,13 @@ export async function syncFetchStudents(): Promise<StudentRecord[]> {
   const localSaved = localStorage.getItem(localKey);
   const fallback = localSaved ? JSON.parse(localSaved) : [
     { 
-      id: 'STD-2026-001', 
+      id: 'FFP/2026/001', 
       name: 'Oluwaseun Adewole', 
       class: 'SS 3', 
       status: 'Enrolled', 
       fees: 'Cleared',
       parentName: 'Mr. Adewole',
-      parentPhone: '08122334455',
+      parentPhone: '0812233455', // standardized
       parentEmail: 'adewole@gmail.com',
       dob: '2010-04-12',
       medicalInfo: 'Alineated left wrist. Clean file.',
@@ -115,7 +125,7 @@ export async function syncFetchStudents(): Promise<StudentRecord[]> {
       ]
     },
     { 
-      id: 'STD-2026-002', 
+      id: 'FFP/2026/002', 
       name: 'Chioma Nwachukwu', 
       class: 'JSS 1', 
       status: 'Enrolled', 
