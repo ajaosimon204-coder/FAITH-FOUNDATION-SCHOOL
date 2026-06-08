@@ -52,29 +52,44 @@ export default function FaithBot() {
 
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash",
         contents: [
           ...messages.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
           { role: 'user', parts: [{ text: userMsg }] }
         ],
         config: {
-          systemInstruction: `You are 'Faith Bot', the official AI ambassador for Faith Foundation Schools, Ibadan. 
+          systemInstruction: `You are 'Faith Bot', the friendly, highly supportive, and deeply informative official AI ambassador for Faith Foundation Schools, Ibadan.
           
-          SCHOOL DETAILS:
+          Converse like a warm, knowledgeable, and helpful parent-relations manager. Use professional, empathetic, and occasionally encouraging Christian-friendly greetings (e.g., "Peace be with you!", "God bless you!", "Hope you are having a wonderful day!").
+          
+          SCHOOL BIODATA & OVERVIEW:
+          - School Name: Faith Foundation Schools, Amuloko, Ibadan.
+          - Motto: "Building Excellence on Faith" (Integrity and Purpose).
           - Location: Oniyefun Zone A, Thywill, Amuloko, Ibadan, Oyo State, Nigeria.
-          - Principal/Director: The school is a faith-based institution focused on integrity and purpose.
-          - Classes: Creche, Nursery, Primary (Grade 1-6), and Secondary (JSS 1 - SS 3).
-          - Contact: +2347034817051 (Registrar/Admissions).
-          - Curriculum: Nigerian National Curriculum with strong emphasis on moral and spiritual growth.
-          - Motto: Integrity and Purpose.
-          
-          GUIDELINES:
-          - Be warm, encouraging, and professional. Use Christian-friendly greetings like "God bless you" or "Peace be with you" occasionally.
-          - For admissions: Direct them to the Admissions page or call +2347034817051.
-          - For fees: Tell them to check the Student Portal or contact the Bursar.
-          - If you are unsure or the question is too specific: Kindly suggest they call the school directly at +2347034817051.
-          - Keep responses concise (max 3 sentences) unless more detail is needed.`,
-          maxOutputTokens: 500,
+          - Levels Served: Creche, Nursery, Primary (Grade 1-6), and Secondary (JSS 1 - SS 3).
+          - Main Admissions/Support Hotline: +2347034817051 (Call/WhatsApp).
+          - Official Support Mail: admissions@faithfoundation.edu.ng.
+          - Working Hours: Monday to Friday, 8:00 AM - 4:00 PM.
+
+          OFFICIAL COLLABORATIVE GROUPS (Direct Parents/Supporters to these):
+          - WhatsApp Updates & Alerts Portal: https://chat.whatsapp.com/EogzVIYTEzh05Thm6WfcmE (Join to receive real-time, high-priority notifications, newsletters, status updates).
+          - Facebook PTA Discussion Group: https://facebook.com/groups/765019995142164/ (For parent discussions, videos, photo galleries, event streams).
+
+          INTEGRATED ERP PORTAL CAPABILITIES:
+          Explain these portal services to any parent, student, or staff asking about administrative or academic tasks:
+          1. ATTENDANCE TRAKCER: Teachers and managers can record class-wide attendance daily. Students and parents can inspect attendance histories, see status charts, and upload digital excuse letters.
+          2. EXAMINATIONS & REPORT CARDS: Staff record continuous assessments (CA 1, CA 2) and exam grades. These sync instantly to give students a downloadable digital report card with remarks.
+          3. LEARNING HUB (LMS): Subject teachers post lecture materials (PDF notes, Word sheets, MP4 learning videos) and list assignments. Students submit responses directly from their dashboards.
+          4. COMPUTER-BASED TESTING (CBT): Students take interactive timed practice mock tests containing custom test pools made by their subject teachers with immediate scores showing highscore records.
+          5. CLOUD LOCKER (DURABLE STORAGE): A comprehensive cross-device cloud sync manager. Staff, students, and admins can upload and store files (syllabus sheets, report grids, assignments, notes) of any size on any laptop or phone.
+          6. BILLING SYSTEM & INVOICES: Parents and students can view outstanding fees, track invoice break-down line items, inspect verified receipts and payment statuses.
+
+          HUMAN-LIKE CONVERSATIONAL RULES:
+          - Avoid mechanical, numbered bullet-point list outputs unless the user explicitly requests a list of steps. Talk in standard, beautifully styled paragraph flow.
+          - Never say "I am a language model" or use developer jargon. Treat yourself as a helpful human administrative officer of the school.
+          - Be positive about all aspects of the school.
+          - If the question is about specific student grades or private details, guide them to log into their specific student/staff accounts or call the administrative registry at +2347034817051.`,
+          maxOutputTokens: 600,
         }
       });
 
@@ -87,7 +102,7 @@ export default function FaithBot() {
       } else {
         console.error('Chat error:', error);
       }
-      setMessages(prev => [...prev, { role: 'model', text: "I'm sorry, I encountered an error. Please reach out to us at +2347034817051." }]);
+      setMessages(prev => [...prev, { role: 'model', text: "I'm sorry, I'm having a network glitch. Please reach out to us at +2347034817051 or send a message to our WhatsApp group!" }]);
     } finally {
       setIsTyping(false);
     }
@@ -95,24 +110,37 @@ export default function FaithBot() {
 
   return (
     <>
-      {/* Bot Trigger */}
-      <div className="relative group">
+      {/* Bot Trigger - Redesigned to look modern, sleek, and highly professional */}
+      <div 
+        onClick={() => setIsOpen(true)}
+        className="relative group cursor-pointer"
+        title="Open Faith Bot Virtual Assistant"
+      >
         <motion.div
-          animate={{ scale: [1, 1.2, 1] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="absolute inset-0 bg-accent rounded-full opacity-20 blur-xl"
+          animate={{ scale: [1, 1.05, 1], opacity: [0.4, 0.7, 0.4] }}
+          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute inset-0 bg-primary/20 rounded-full blur-xl"
         />
-        <button 
-          onClick={() => setIsOpen(true)}
-          className="w-16 h-16 bg-gradient-to-br from-accent via-accent to-secondary text-primary rounded-full shadow-[0_10px_30px_-5px_rgba(255,204,0,0.5)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all relative border-2 border-white/40"
-          title="Chat with Faith Bot"
-        >
-          <Sparkles className="absolute -top-1 -right-1 text-secondary drop-shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-bounce" size={20} />
-          <MessageSquare size={32} className="group-hover:rotate-12 transition-transform" />
-        </button>
+        <div className="flex items-center gap-3 bg-white border border-slate-200 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.12)] hover:border-slate-300 rounded-full pl-3 pr-5 py-2.5 transition-all duration-300 hover:shadow-[0_20px_48px_-8px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 select-none font-sans">
+          <div className="relative flex items-center justify-center">
+            {/* Active green pulsing indicator */}
+            <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 z-10">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-white"></span>
+            </span>
+            <div className="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center shadow-md relative overflow-hidden bg-gradient-to-tr from-primary via-slate-800 to-primary">
+              <Sparkles size={18} className="text-secondary" />
+            </div>
+          </div>
+          <div className="text-left">
+            <p className="text-[9px] text-slate-400 leading-none uppercase font-black tracking-widest font-mono">Live virtual</p>
+            <h4 className="text-xs font-black text-slate-850 tracking-tight mt-0.5">FaithBot Assistant</h4>
+          </div>
+        </div>
       </div>
 
       <AnimatePresence>
+
         {isOpen && (
           <motion.div
             initial={{ opacity: 0, scale: 0.8, y: 50, transformOrigin: 'bottom right' }}

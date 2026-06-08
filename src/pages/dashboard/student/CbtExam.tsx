@@ -15,6 +15,7 @@ import {
   Gamepad2,
   FileText
 } from 'lucide-react';
+import { syncFetchAllCbtExams } from '../../../lib/sync';
 
 interface Question {
   id: number;
@@ -139,6 +140,8 @@ export default function CbtExam() {
     return () => clearInterval(timer);
   }, [phase, timeRemaining]);
 
+  const [triggerRescan, setTriggerRescan] = useState(0);
+
   // Load student profile & find their assigned class limits
   useEffect(() => {
     const savedGrades = localStorage.getItem('ff_student_report_card');
@@ -163,6 +166,11 @@ export default function CbtExam() {
     if (saved) {
       setHighScores(JSON.parse(saved));
     }
+
+    // In background, fetch all available CBT exam settings from Supabase to sync in real-time
+    syncFetchAllCbtExams().then(() => {
+      setTriggerRescan(prev => prev + 1);
+    });
   }, []);
 
   // Scan local directories and browser storage to locate assigned/posted cbt examinations
@@ -213,7 +221,7 @@ export default function CbtExam() {
     });
 
     setAvailableModules(finalModules);
-  }, [studentClass]);
+  }, [studentClass, triggerRescan]);
 
   const getSubjectQuestions = (subj: string): Question[] => {
     const key = `ff_cbt_${subj.toLowerCase().replace(/\s+/g, '_')}_${studentClass.toLowerCase().replace(/\s+/g, '_')}_questions`;

@@ -827,6 +827,48 @@ export async function syncSaveCbtSettings(subjectId: string, questions: any[], d
   }
 }
 
+export async function syncSaveCustomCbtExam(key: string, questions: any[], durationMinutes: number): Promise<void> {
+  localStorage.setItem(key, JSON.stringify(questions));
+  localStorage.setItem(`${key}_duration`, durationMinutes.toString());
+
+  if (isSandbox() || !isSupabaseConfigured) return;
+
+  try {
+    await supabase.from('cbt_questions').upsert({
+      id: key,
+      questions,
+      duration_minutes: durationMinutes
+    });
+  } catch (err) {
+    console.error('Sync save custom CBT settings failed:', err);
+  }
+}
+
+export async function syncFetchAllCbtExams(): Promise<void> {
+  if (isSandbox() || !isSupabaseConfigured) return;
+
+  try {
+    const { data, error } = await supabase
+      .from('cbt_questions')
+      .select('*');
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      data.forEach((row: any) => {
+        if (row.id && row.questions) {
+          localStorage.setItem(row.id, JSON.stringify(row.questions));
+          if (row.duration_minutes) {
+            localStorage.setItem(`${row.id}_duration`, row.duration_minutes.toString());
+          }
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('Sync fetch all CBT exams failed:', err);
+  }
+}
+
 // ==========================================
 // 8. LMS FILES / NOTES SYNC
 // ==========================================

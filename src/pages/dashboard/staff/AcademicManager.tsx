@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { sendNotification } from '../../../lib/notifications';
 import { useAuth } from '../../../contexts/AuthContext';
-import { syncFetchStudents, syncFetchReportCardsMap, syncSaveReportCardsMap, logSystemActivity, syncSaveStudents } from '../../../lib/sync';
+import { syncFetchStudents, syncFetchReportCardsMap, syncSaveReportCardsMap, logSystemActivity, syncSaveStudents, syncSaveCustomCbtExam, syncFetchAllCbtExams } from '../../../lib/sync';
 import { 
   FileText, 
   UploadCloud, 
@@ -805,6 +805,36 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
     }
   };
 
+  const handleDeleteStudentProfile = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete the student profile for ${name} (${id})? This will erase their profile from all sync catalog records.`)) {
+      return;
+    }
+
+    try {
+      const allStudents = await syncFetchStudents();
+      const updatedList = allStudents.filter((std: any) => std.id !== id);
+      await syncSaveStudents(updatedList);
+
+      // Update matching local list
+      const matching = updatedList.filter((std: any) => {
+        if (!assignedClasses || assignedClasses.length === 0) return false;
+        return assignedClasses.some(c => std.class?.toLowerCase().trim() === c.toLowerCase().trim());
+      });
+      setStudents(matching);
+      
+      if (matching.length > 0) {
+        setSelectedStudent(matching[0]);
+      } else {
+        setSelectedStudent(null);
+      }
+
+      showSuccessBanner(`Successfully deleted student profile for ${name}`);
+      logAudit('Student Profile Deleted', `Teacher deleted file and biodata parameters for ${name} (${id})`);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // --- Subject Exam Recording & Batch entry synchronizer ---
   const saveSubjectExamRecords = async () => {
     try {
@@ -945,9 +975,9 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
 
 
   // --- 4. CBT Exam Questions posting and editing ---
-  const saveCbtExamPool = () => {
+  const saveCbtExamPool = async () => {
     const key = `ff_cbt_${cbtSubject.toLowerCase().replace(/\s+/g, '_')}_${cbtClass.toLowerCase().replace(/\s+/g, '_')}_questions`;
-    localStorage.setItem(key, JSON.stringify(cbtQuestions));
+    await syncSaveCustomCbtExam(key, cbtQuestions, 45);
     setEditingQuestionId(null);
     showSuccessBanner(`Automated ${cbtSubject} CBT diagnostic examination questions pool for ${cbtClass} has been updated.`);
   };
@@ -1542,6 +1572,17 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
                         </div>
                       </div>
 
+                    </div>
+
+                    {/* Delete student profile record option */}
+                    <div className="pt-4 border-t flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteStudentProfile(selectedStudent.id, selectedStudent.name)}
+                        className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-650 font-black uppercase tracking-wider text-[9px] px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1"
+                      >
+                        <Trash2 size={11} className="text-red-650" /> Delete Student Profile
+                      </button>
                     </div>
 
                     {/* Profile release notice */}

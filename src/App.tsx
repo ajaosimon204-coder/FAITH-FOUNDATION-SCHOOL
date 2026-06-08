@@ -23,7 +23,6 @@ import AdminDashboard from './pages/dashboard/AdminDashboard';
 import StudentDashboard from './pages/dashboard/StudentDashboard';
 import StaffDashboard from './pages/dashboard/StaffDashboard';
 import { getSupabaseConfigError } from './lib/supabase';
-import SystemDoctor from './components/SystemDoctor';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -145,7 +144,6 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <FloatingActions />
-          <SystemDoctor />
         </NotificationProvider>
       </AuthProvider>
     </Router>

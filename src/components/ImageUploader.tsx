@@ -100,7 +100,7 @@ export default function ImageUploader(props: ImageUploaderProps) {
     }
   };
 
-  const acceptedTypes = accept || "image/*";
+  const acceptedTypes = accept || "*/*";
   const isImg = currentUrl && (
     currentUrl.startsWith('data:image') || 
     /\.(jpeg|jpg|gif|png|webp|svg)$/i.test(currentUrl) ||
