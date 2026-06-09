@@ -33,82 +33,6 @@ interface HighScore {
   date: string;
 }
 
-const MATHEMATICS_QUESTIONS: Question[] = [
-  {
-    id: 1,
-    question: 'Find the derivative of f(x) = x * sin(x) with respect to x.',
-    options: ['cos(x)', 'sin(x) + x * cos(x)', 'x * cos(x) - sin(x)', 'sin(x) - x * cos(x)'],
-    correctIndex: 1,
-    explanation: 'By using the product rule: d/dx [u*v] = u\'v + uv\'. Let u = x (u\' = 1) and v = sin(x) (v\' = cos(x)). Consequently, the derivative is (1 * sin(x)) + (x * cos(x)).'
-  },
-  {
-    id: 2,
-    question: 'Solve for x in the quadratic inequality x² - 5x + 6 < 0.',
-    options: ['x < 2 or x > 3', '2 <= x <= 3', '2 < x < 3', 'x is any real number'],
-    correctIndex: 2,
-    explanation: 'First factor the trinomial: (x - 2)(x - 3). The roots are 2 and 3. Testing intervals yields that the product is negative strictly between these boundaries, i.e., 2 < x < 3.'
-  },
-  {
-    id: 3,
-    question: 'Find the limit of (sin x) / x as x approaches 0.',
-    options: ['0', '1', 'Undefined', 'Infinity'],
-    correctIndex: 1,
-    explanation: 'This is a fundamental engineering limit in calculus defined via squeeze theorem or L\'Hopital\'s rule: lim(x->0) (cos x) / 1 = cos(0) = 1.'
-  },
-  {
-    id: 4,
-    question: 'Given a matrix A = [[2, 3], [1, 4]], find its determinant.',
-    options: ['5', '11', '8', '2'],
-    correctIndex: 0,
-    explanation: 'The determinant of a 2x2 matrix [[a, b], [c, d]] is calculated as (ad - bc). Here det(A) = (2 * 4) - (3 * 1) = 8 - 3 = 5.'
-  },
-  {
-    id: 5,
-    question: 'What is the sum of coordinates for the vector projection of u=(2,5) onto v=(1,0)?',
-    options: ['2', '5', '0', '7'],
-    correctIndex: 0,
-    explanation: 'The projection of u onto the unit x-axis vector v=(1,0) is simply the x-component of u, which is (2,0). The sum of coordinates is 2 + 0 = 2.'
-  }
-];
-
-const PHYSICS_QUESTIONS: Question[] = [
-  {
-    id: 1,
-    question: 'What is the force of attraction between two 1 Coulomb charges separated by exactly 1 meter in a vacuum?',
-    options: ['1 Newton', '9.0 x 10⁹ Newtons', '8.85 x 10⁻¹² Newtons', '9.0 x 10⁻⁹ Newtons'],
-    correctIndex: 1,
-    explanation: 'According to Coulomb\'s Law, F = k * (|q1 * q2| / d²). Inside a vacuum, the constant k is approximately 8.9875 x 10⁹ (usually rounded to 9.0 x 10⁹ N*m²/C²). F = (9.0 x 10⁹) * (1 * 1) / 1² = 9.0 x 10⁹ N.'
-  },
-  {
-    id: 2,
-    question: 'Under a constant net external force, what happens to the velocity of an accelerating body if its mass increases?',
-    options: ['Increases exponentially', 'Decreases inversely', 'Its rate of acceleration decreases', 'Stays exactly the same'],
-    correctIndex: 2,
-    explanation: 'Using Newton\'s second law of motion (F = ma, which converts to a = F/m), acceleration represents a strictly inverse ratio of mass. If mass increases, acceleration rates fall.'
-  },
-  {
-    id: 3,
-    question: 'Which electromagnetic spectrum wave possesses the highest photon energy?',
-    options: ['Gamma Ray radiation', 'X-Rays', 'Ultraviolet light', 'Infrared thermal waves'],
-    correctIndex: 0,
-    explanation: 'Energy is given by E = hf (Planck\'s law). Gamma rays possess the highest frequency (f) and shortest wavelengths, meaning their individual photons harbor the greatest kinetic energy.'
-  },
-  {
-    id: 4,
-    question: 'What is the absolute speed of light in a diamond crystal of refractive index 2.42?',
-    options: ['3.0 x 10⁸ m/s', '1.24 x 10⁸ m/s', '2.42 x 10⁸ m/s', '0.8 x 10⁸ m/s'],
-    correctIndex: 1,
-    explanation: 'The index of refraction is n = c / v. Therefore v = c / n = (3.0 x 10⁸) / 2.42, which is approximately 1.24 x 10⁸ m/s.'
-  },
-  {
-    id: 5,
-    question: 'A capacitance C connected to a DC circuit initially blocks which current flow element?',
-    options: ['High frequency AC', 'Direct current (DC)', 'Magnetic leakage', 'Static friction'],
-    correctIndex: 1,
-    explanation: 'A capacitor acts as an open circuit to steady DC voltages because capacitive reactance Xc = 1 / (2 * pi * f * C). Since DC frequency f = 0, reactants approach infinity.'
-  }
-];
-
 export default function CbtExam() {
   const [phase, setPhase] = useState<'config' | 'exam' | 'result'>('config');
   const [selectedSubject, setSelectedSubject] = useState<string>('Mathematics');
@@ -175,11 +99,6 @@ export default function CbtExam() {
 
   // Scan local directories and browser storage to locate assigned/posted cbt examinations
   useEffect(() => {
-    const defaultModules = [
-      { subject: 'Mathematics', class: studentClass, description: 'Calculus derivatives, polar coordinate matrices, algebraic inequalities, vector projection rules.' },
-      { subject: 'Physics', class: studentClass, description: 'Coulomb’s Law calculations, acceleration ratios, photon energy levels, refractive optics, capacities.' }
-    ];
-
     const scannedModules: { subject: string; class: string; description: string }[] = [];
 
     // Scan localStorage for custom posted CBT indices matching this student's class target
@@ -212,15 +131,8 @@ export default function CbtExam() {
       }
     }
 
-    // De-duplicate custom scanned modules, fall back to defaults if no custom tests exist
-    const finalModules = [...scannedModules];
-    defaultModules.forEach(def => {
-      if (!finalModules.some(m => m.subject.toLowerCase() === def.subject.toLowerCase())) {
-        finalModules.push(def);
-      }
-    });
-
-    setAvailableModules(finalModules);
+    // Rely purely on real scanned custom modules matching the student's class
+    setAvailableModules(scannedModules);
   }, [studentClass, triggerRescan]);
 
   const getSubjectQuestions = (subj: string): Question[] => {
@@ -237,9 +149,7 @@ export default function CbtExam() {
       if (savedLegacy) return JSON.parse(savedLegacy);
     }
 
-    const defaults = subj === 'Mathematics' ? MATHEMATICS_QUESTIONS : PHYSICS_QUESTIONS;
-    localStorage.setItem(key, JSON.stringify(defaults));
-    return defaults;
+    return [];
   };
 
   const startExam = (subject: string) => {
@@ -339,25 +249,33 @@ export default function CbtExam() {
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-105 pb-3">Available CBT Practice Modules</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {availableModules.map((mod, mIdx) => (
-                  <div key={mIdx} className="p-6 border border-slate-150 bg-slate-50/50 rounded-2xl hover:border-slate-350 hover:bg-white transition-all flex flex-col justify-between h-[210px] group">
-                    <div className="space-y-2 text-left">
-                      <span className="bg-primary/10 text-primary text-[9px] font-black uppercase px-2.5 py-1 rounded inline-block font-mono tracking-wider">
-                        {mod.class} Assessment Pool
-                      </span>
-                      <h4 className="text-sm font-bold text-slate-800 uppercase">{mod.subject} Practice</h4>
-                      <p className="text-[11px] text-slate-500 leading-relaxed h-[65px] overflow-hidden line-clamp-3">
-                        {mod.description || "Diagnostics continuous assessment questions curated by institutional subject instructor."}
-                      </p>
-                    </div>
-                    <button 
-                      onClick={() => startExam(mod.subject)}
-                      className="w-full mt-4 bg-primary text-white py-3 rounded-lg text-[10px] font-black uppercase tracking-widest text-center shadow-md shadow-primary/15 hover:bg-primary/95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      Start Exam Session <ArrowRight size={12} />
-                    </button>
+                {availableModules.length === 0 ? (
+                  <div className="col-span-1 md:col-span-2 text-center py-12 space-y-3">
+                    <div className="text-3xl">💻</div>
+                    <p className="text-xs font-black uppercase text-slate-800 tracking-wider">No CBT practice modules available</p>
+                    <p className="text-[10px] text-slate-450 max-w-sm mx-auto font-semibold leading-relaxed">No computer-based tests or continuous practice assessments have been published/assigned for Class {studentClass} yet.</p>
                   </div>
-                ))}
+                ) : (
+                  availableModules.map((mod, mIdx) => (
+                    <div key={mIdx} className="p-6 border border-slate-150 bg-slate-50/50 rounded-2xl hover:border-slate-350 hover:bg-white transition-all flex flex-col justify-between h-[210px] group">
+                      <div className="space-y-2 text-left">
+                        <span className="bg-primary/10 text-primary text-[9px] font-black uppercase px-2.5 py-1 rounded inline-block font-mono tracking-wider">
+                          {mod.class} Assessment Pool
+                        </span>
+                        <h4 className="text-sm font-bold text-slate-800 uppercase">{mod.subject} Practice</h4>
+                        <p className="text-[11px] text-slate-500 leading-relaxed h-[65px] overflow-hidden line-clamp-3">
+                          {mod.description || "Diagnostics continuous assessment questions curated by institutional subject instructor."}
+                        </p>
+                      </div>
+                      <button 
+                        onClick={() => startExam(mod.subject)}
+                        className="w-full mt-4 bg-primary text-white py-3 rounded-lg text-[10px] font-black uppercase tracking-widest text-center shadow-md shadow-primary/15 hover:bg-primary/95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        Start Exam Session <ArrowRight size={12} />
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -369,8 +287,8 @@ export default function CbtExam() {
               
               <div className="space-y-3">
                 {highScores.length === 0 ? (
-                  <div className="text-xs text-slate-400 italic text-center py-8">
-                    No historic cbt records detected. Attempt an exam module to record scores.
+                  <div className="text-xs text-slate-400 font-semibold text-center py-8">
+                    No CBT records available.
                   </div>
                 ) : (
                   highScores.map((score, index) => (

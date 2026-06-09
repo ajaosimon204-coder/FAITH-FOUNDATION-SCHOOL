@@ -3,6 +3,13 @@ import { PublicNavbar } from '../components/Navbar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { 
+  selectRandomQuestions, 
+  getDivisionTimeLimitMinutes, 
+  getSchoolDivision,
+  CBTQuestion,
+  CBT_CLASSES
+} from '../lib/cbtQuestionBank';
+import { 
   CheckCircle, ArrowRight, ArrowLeft, User, Mail, Phone, MapPin, Loader2, Info, 
   Upload, Sparkles, AlertCircle, FileText, Calendar, BookOpen, Clock, Heart, 
   HelpCircle, Eye, ShieldCheck, Download, Printer, CreditCard, Lock, Check,
@@ -104,8 +111,11 @@ interface ApplicationData {
 
   // Step 8: Academic Examination CBT
   cbtScore: number | null;
+  cbtMathScore?: number | null;
+  cbtEnglScore?: number | null;
+  tabSwitchesCount?: number | null;
   cbtTaken: boolean;
-  cbtAnswers: Record<number, string>;
+  cbtAnswers: Record<string, string>;
   examDate: string; // Scheduled by admin
   interviewDate: string; // Scheduled by admin
 
@@ -211,6 +221,9 @@ const initialFormData: ApplicationData = {
   docUtilityBill: '',
 
   cbtScore: null,
+  cbtMathScore: null,
+  cbtEnglScore: null,
+  tabSwitchesCount: 0,
   cbtTaken: false,
   cbtAnswers: {},
   examDate: 'Awaiting Schedule',
@@ -290,10 +303,11 @@ export default function Admissions() {
   const [cbtStep, setCbtStep] = useState<'rules' | 'active' | 'results'>('rules');
   const [currentCbtQuestionIndex, setCurrentCbtQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState('');
-  const [cbtTempAnswers, setCbtTempAnswers] = useState<Record<number, string>>({});
-  const [cbtQuestions, setCbtQuestions] = useState<{ id: number; question: string; options: string[]; correct: string }[]>([]);
-  const [cbtDurationMinutes, setCbtDurationMinutes] = useState<number>(5);
+  const [cbtTempAnswers, setCbtTempAnswers] = useState<Record<string, string>>({});
+  const [cbtQuestions, setCbtQuestions] = useState<CBTQuestion[]>([]);
+  const [cbtDurationMinutes, setCbtDurationMinutes] = useState<number>(30);
   const [cbtSecondsLeft, setCbtSecondsLeft] = useState<number>(0);
+  const [cbtTabSwitches, setCbtTabSwitches] = useState<number>(0);
   
   // Online verification status
   const [showStatusAlert, setShowStatusAlert] = useState<string | null>(null);
@@ -322,31 +336,102 @@ export default function Admissions() {
     }
   }, []);
 
-  // Sync CBT Questions and Timer settings from localStorage
-  useEffect(() => {
-    const savedQuestions = localStorage.getItem('ff_cbt_questions');
-    if (savedQuestions) {
-      try {
-        setCbtQuestions(JSON.parse(savedQuestions));
-      } catch (err) {
-        console.warn('Unable to parse custom CBT questions', err);
-        setCbtQuestions(CBT_QUESTIONS);
-      }
-    } else {
-      setCbtQuestions(CBT_QUESTIONS);
-      localStorage.setItem('ff_cbt_questions', JSON.stringify(CBT_QUESTIONS));
-    }
+  // Core CBT Grading Engine (Marks Math out of 50, English out of 50, Total 100)
+  const calculateCbtScores = (answersMap: Record<string, string>, questionList: CBTQuestion[]) => {
+    let mathCorrect = 0;
+    let mathCount = 0;
+    let englCorrect = 0;
+    let englCount = 0;
 
-    const savedDuration = localStorage.getItem('ff_cbt_duration_minutes');
-    if (savedDuration) {
-      const parsed = parseInt(savedDuration, 10);
-      if (!isNaN(parsed) && parsed > 0) {
-        setCbtDurationMinutes(parsed);
+    questionList.forEach(q => {
+      const studentAns = answersMap[q.id] || '';
+      if (q.subject === 'Mathematics') {
+        mathCount++;
+        if (q.type === 'Matching') {
+          if (q.matchingPairs && q.matchingPairs.length > 0) {
+            let matchesCorrect = 0;
+            q.matchingPairs.forEach(p => {
+              const pairStr = `${p.left}=>${p.right}`;
+              if (studentAns.includes(pairStr)) {
+                matchesCorrect++;
+              }
+            });
+            mathCorrect += (matchesCorrect / q.matchingPairs.length);
+          } else if (studentAns === q.correct) {
+            mathCorrect++;
+          }
+        } else {
+          if (studentAns.trim().toLowerCase() === q.correct.trim().toLowerCase()) {
+            mathCorrect++;
+          }
+        }
+      } else {
+        englCount++;
+        if (q.type === 'Matching') {
+          if (q.matchingPairs && q.matchingPairs.length > 0) {
+            let matchesCorrect = 0;
+            q.matchingPairs.forEach(p => {
+              const pairStr = `${p.left}=>${p.right}`;
+              if (studentAns.includes(pairStr)) {
+                matchesCorrect++;
+              }
+            });
+            englCorrect += (matchesCorrect / q.matchingPairs.length);
+          } else if (studentAns === q.correct) {
+            englCorrect++;
+          }
+        } else {
+          if (studentAns.trim().toLowerCase() === q.correct.trim().toLowerCase()) {
+            englCorrect++;
+          }
+        }
       }
-    } else {
-      localStorage.setItem('ff_cbt_duration_minutes', '5');
+    });
+
+    const mathScore = mathCount > 0 ? (mathCorrect / mathCount) * 50 : 0;
+    const englScore = englCount > 0 ? (englCorrect / englCount) * 50 : 0;
+    const rawTotal = mathScore + englScore;
+    const cbtScore = Math.min(100, Math.max(0, Math.round(rawTotal)));
+
+    return {
+      cbtMathScore: Math.round(mathScore * 10) / 10,
+      cbtEnglScore: Math.round(englScore * 10) / 10,
+      cbtScore: cbtScore
+    };
+  };
+
+  // Sync CBT duration limits from candidate intended Class level
+  useEffect(() => {
+    if (cbtStep === 'rules') {
+      const cls = formData.intendedClass || 'Primary 6';
+      const limit = getDivisionTimeLimitMinutes(cls);
+      setCbtDurationMinutes(limit);
     }
-  }, [cbtStep]);
+  }, [cbtStep, formData.intendedClass]);
+
+  // Tab switching security warnings listener
+  useEffect(() => {
+    if (cbtStep !== 'active') return;
+
+    const handleFocusLoss = () => {
+      setCbtTabSwitches(prev => {
+        const nextCount = prev + 1;
+        if (nextCount >= 3) {
+          alert("Security Violation: You have switched tabs or exited the exam window 3 times. Your exam is being automatically submitted now.");
+          handleAutoSubmitCbt(nextCount);
+          return nextCount;
+        } else {
+          alert(`SECURITY WARNING #${nextCount}: Tab switching or window defocusing detected. Your activity is being logged. The exam will automatically submit after 3 window defocus notifications.`);
+          return nextCount;
+        }
+      });
+    };
+
+    window.addEventListener('blur', handleFocusLoss);
+    return () => {
+      window.removeEventListener('blur', handleFocusLoss);
+    };
+  }, [cbtStep, cbtQuestions, cbtTempAnswers, currentCbtQuestionIndex, selectedAnswer]);
 
   // Handle active countdown ticking
   useEffect(() => {
@@ -356,7 +441,6 @@ export default function Admissions() {
       setCbtSecondsLeft(prev => {
         if (prev <= 1) {
           clearInterval(tick);
-          // Trigger automatic calculation when time reaches zero
           setTimeout(() => {
             handleAutoSubmitCbt();
           }, 10);
@@ -369,36 +453,34 @@ export default function Admissions() {
     return () => clearInterval(tick);
   }, [cbtStep, cbtQuestions, cbtTempAnswers, currentCbtQuestionIndex, selectedAnswer]);
 
-  const handleAutoSubmitCbt = () => {
-    // Record current answers and calculate
+  const handleAutoSubmitCbt = (forcedTabSwitches?: number) => {
     const finalAnswers = { ...cbtTempAnswers };
     const activeQ = cbtQuestions[currentCbtQuestionIndex];
     if (activeQ && selectedAnswer) {
       finalAnswers[activeQ.id] = selectedAnswer;
     }
 
-    let score = 0;
-    cbtQuestions.forEach(q => {
-      if (finalAnswers[q.id] === q.correct) {
-        score += 1;
-      }
-    });
+    const switches = forcedTabSwitches !== undefined ? forcedTabSwitches : cbtTabSwitches;
+    const scores = calculateCbtScores(finalAnswers, cbtQuestions);
 
-    const percent = cbtQuestions.length > 0 ? Math.round((score / cbtQuestions.length) * 100) : 0;
+    const updatedData = {
+      cbtTaken: true,
+      cbtScore: scores.cbtScore,
+      cbtMathScore: scores.cbtMathScore,
+      cbtEnglScore: scores.cbtEnglScore,
+      tabSwitchesCount: switches,
+      cbtAnswers: finalAnswers
+    };
 
     setFormData(prev => ({
       ...prev,
-      cbtTaken: true,
-      cbtScore: percent,
-      cbtAnswers: finalAnswers
+      ...updatedData
     }));
 
     if (activePortalApplication) {
       const updatedApp = {
         ...activePortalApplication,
-        cbtTaken: true,
-        cbtScore: percent,
-        cbtAnswers: finalAnswers
+        ...updatedData
       };
       setActivePortalApplication(updatedApp);
       const allAppListStr = localStorage.getItem('ff_admissions');
@@ -417,7 +499,7 @@ export default function Admissions() {
     }
 
     setCbtStep('results');
-    setShowStatusAlert('CBT Exam Countdown elapsed! Your answers have been automatically logged.');
+    setShowStatusAlert('CBT Exam finished! Performance scores have been logged into your application profile.');
     setTimeout(() => setShowStatusAlert(null), 5000);
   };
 
@@ -626,44 +708,93 @@ export default function Admissions() {
 
   // CBT actions
   const startCbtExam = () => {
-    const qCount = cbtQuestions.length > 0 ? cbtQuestions.length : CBT_QUESTIONS.length;
-    setCbtSecondsLeft(cbtDurationMinutes * 60);
+    const classLevel = formData.intendedClass || activePortalApplication?.intendedClass || 'Primary 6';
+    const candidateId = formData.id || activePortalApplication?.id || 'CANDIDATE_' + Math.floor(Math.random() * 8999 + 1000);
+    
+    // 1. Fetch academic class level questions
+    const { mathQs, englQs } = selectRandomQuestions(classLevel, candidateId);
+    
+    // 2. Blend and shuffle the 40 questions (20 math, 20 English)
+    const combined = [...mathQs, ...englQs];
+    const shuffleSeed = `COMBINED_SHUFFLE_${candidateId}_${classLevel}`;
+    
+    // Stable pseudo-random seed generator
+    let h = 1779033703 ^ shuffleSeed.length;
+    for (let i = 0; i < shuffleSeed.length; i++) {
+      h = Math.imul(h ^ shuffleSeed.charCodeAt(i), 3432918353);
+      h = (h << 13) | (h >>> 19);
+    }
+    const randValForShuffle = () => {
+      h = (h + 0x7ED55D16) + (h << 12);
+      h = (h ^ 0xc55261a1) ^ (h >>> 19);
+      h = (h + 0x165667b1) + (h << 5);
+      h = (h + 0xd3a2646c) ^ (h << 9);
+      h = (h + 0xfd7046c5) + (h << 3);
+      h = (h ^ 0xb55a4f09) ^ (h >>> 16);
+      return (h >>> 0) / 4294967296;
+    };
+    
+    for (let i = combined.length - 1; i > 0; i--) {
+      const j = Math.floor(randValForShuffle() * (i + 1));
+      [combined[i], combined[j]] = [combined[j], combined[i]];
+    }
+
+    // 3. Set division-specific time limits
+    const limitMins = getDivisionTimeLimitMinutes(classLevel);
+
+    setCbtQuestions(combined);
+    setCbtDurationMinutes(limitMins);
+    setCbtSecondsLeft(limitMins * 60);
     setCbtStep('active');
     setCurrentCbtQuestionIndex(0);
     setCbtTempAnswers({});
     setSelectedAnswer('');
+    setCbtTabSwitches(0);
   };
 
   const handleCbtAnswerSelect = (option: string) => {
     setSelectedAnswer(option);
+    
+    // Dynamic real-time save to prevent lost inputs on click
+    if (cbtQuestions.length > 0) {
+      const qId = cbtQuestions[currentCbtQuestionIndex].id;
+      const updatedAnswers = { ...cbtTempAnswers, [qId]: option };
+      setCbtTempAnswers(updatedAnswers);
+      const draftKey = `ff_cbt_autosave_${formData.id || activePortalApplication?.id || 'draft'}`;
+      localStorage.setItem(draftKey, JSON.stringify(updatedAnswers));
+    }
   };
 
   const handleNextCbtQuestion = () => {
-    const activeQuestions = cbtQuestions.length > 0 ? cbtQuestions : CBT_QUESTIONS;
-    if (activeQuestions.length === 0) return;
+    if (cbtQuestions.length === 0) return;
 
-    const qId = activeQuestions[currentCbtQuestionIndex].id;
+    const qId = cbtQuestions[currentCbtQuestionIndex].id;
     const updatedAnswers = { ...cbtTempAnswers, [qId]: selectedAnswer };
     setCbtTempAnswers(updatedAnswers);
     
+    // Write auto-saves to LocalStorage
+    const draftKey = `ff_cbt_autosave_${formData.id || activePortalApplication?.id || 'draft'}`;
+    localStorage.setItem(draftKey, JSON.stringify(updatedAnswers));
+
     setSelectedAnswer('');
 
-    if (currentCbtQuestionIndex < activeQuestions.length - 1) {
+    if (currentCbtQuestionIndex < cbtQuestions.length - 1) {
       setCurrentCbtQuestionIndex(prev => prev + 1);
+      // Hydrate with previously saved answer if exists
+      const nextQId = cbtQuestions[currentCbtQuestionIndex + 1].id;
+      if (updatedAnswers[nextQId]) {
+        setSelectedAnswer(updatedAnswers[nextQId]);
+      }
     } else {
-      // Calculate Score
-      let score = 0;
-      activeQuestions.forEach(q => {
-        if (updatedAnswers[q.id] === q.correct) {
-          score += 1;
-        }
-      });
-
-      const finalPercent = Math.round((score / activeQuestions.length) * 100);
+      // Calculate Scores
+      const scores = calculateCbtScores(updatedAnswers, cbtQuestions);
 
       const updatedData = {
         cbtTaken: true,
-        cbtScore: finalPercent,
+        cbtScore: scores.cbtScore,
+        cbtMathScore: scores.cbtMathScore,
+        cbtEnglScore: scores.cbtEnglScore,
+        tabSwitchesCount: cbtTabSwitches,
         cbtAnswers: updatedAnswers
       };
 
@@ -1949,75 +2080,232 @@ export default function Admissions() {
                       </div>
                     )}
 
-                    {cbtStep === 'active' && (
-                      <div className="bg-white rounded-[32px] border border-slate-200 p-8 md:p-12 space-y-8 shadow-md relative overflow-hidden">
-                        {/* Progressive indicator bar at the top */}
-                        <div className="absolute top-0 left-0 right-0 h-1.5 bg-slate-100">
-                          <div 
-                            className="h-full bg-amber-500 transition-all duration-300"
-                            style={{ width: `${((currentCbtQuestionIndex + 1) / (cbtQuestions.length || CBT_QUESTIONS.length)) * 100}%` }}
-                          />
-                        </div>
+                    {cbtStep === 'active' && (() => {
+                      const activeQ = cbtQuestions[currentCbtQuestionIndex];
+                      if (!activeQ) return null;
 
-                        <div className="flex justify-between items-center border-b border-slate-100 pb-4 font-mono text-[10px] text-slate-400 font-bold">
-                          <span className="uppercase tracking-widest text-[#111827] bg-slate-100 px-3 py-1 rounded-full">
-                            QUESTION {currentCbtQuestionIndex + 1} OF {cbtQuestions.length || CBT_QUESTIONS.length}
-                          </span>
-                          <span className={`flex items-center gap-1 text-xs px-3 py-1 rounded-full font-black tracking-wide ${cbtSecondsLeft < 60 ? 'bg-rose-50 text-rose-600 animate-pulse border border-rose-150' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
-                            <Clock size={14} className="animate-spin" /> Timer: {formatCountdown(cbtSecondsLeft)}
-                          </span>
-                        </div>
+                      // Helper to extract dropdown matching value
+                      const getMatchingValueForLeftItem = (left: string) => {
+                        if (!selectedAnswer) return "";
+                        const pairs = selectedAnswer.split(" | ");
+                        const match = pairs.find(p => p.startsWith(`${left}=>`));
+                        if (match) {
+                          return match.split("=>")[1] || "";
+                        }
+                        return "";
+                      };
 
-                        <div className="space-y-6">
-                          <h4 className="text-lg md:text-2xl font-black text-[#111827] leading-relaxed uppercase select-none">
-                            {(cbtQuestions.length > 0 ? cbtQuestions : CBT_QUESTIONS)[currentCbtQuestionIndex]?.question}
-                          </h4>
-                          
-                          <div className="grid gap-4 mt-8">
-                            {(cbtQuestions.length > 0 ? cbtQuestions : CBT_QUESTIONS)[currentCbtQuestionIndex]?.options.map((opt, i) => (
-                              <button
-                                key={i}
-                                type="button"
-                                onClick={() => handleCbtAnswerSelect(opt)}
-                                className={`w-full p-5 rounded-2xl text-sm font-black transition-all text-left border-2 ${
-                                  selectedAnswer === opt 
-                                    ? 'bg-amber-50/80 text-amber-950 border-amber-500 shadow-md font-extrabold translate-x-1' 
-                                    : 'bg-slate-50 text-slate-755 border-slate-100 hover:bg-slate-100/30'
-                                }`}
-                              >
-                                <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-white border font-mono font-black text-xs mr-3 shadow-sm text-slate-400 uppercase">
-                                  {String.fromCharCode(65 + i)}
+                      // Helper to process row pairings changes
+                      const handleMatchingSelect = (left: string, right: string) => {
+                        const leftItems = activeQ.matchingPairs?.map(p => p.left) || [];
+                        const pairs = leftItems.map(item => {
+                          const val = item === left ? right : getMatchingValueForLeftItem(item);
+                          return `${item}=>${val}`;
+                        });
+                        const newAnswerString = pairs.join(" | ");
+                        handleCbtAnswerSelect(newAnswerString);
+                      };
+
+                      return (
+                        <div className="bg-white rounded-[32px] border border-slate-200 p-6 md:p-10 space-y-8 shadow-md relative overflow-hidden animate-in zoom-in-95 duration-200">
+                          {/* Progressive indicator bar at the top */}
+                          <div className="absolute top-0 left-0 right-0 h-1.5 bg-slate-100">
+                            <div 
+                              className="h-full bg-amber-500 transition-all duration-300"
+                              style={{ width: `${((currentCbtQuestionIndex + 1) / cbtQuestions.length) * 100}%` }}
+                            />
+                          </div>
+
+                          {/* Header indicators */}
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-4 font-mono text-[10px] text-slate-450 font-bold gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className="uppercase tracking-widest text-[#111827] bg-slate-100 px-3 py-1 rounded-full text-[9px]">
+                                Question {currentCbtQuestionIndex + 1} of {cbtQuestions.length}
+                              </span>
+                              <span className="uppercase text-[9px] bg-sky-50 text-sky-700 px-2.5 py-1 rounded-full border border-sky-100">
+                                Subject: {activeQ.subject}
+                              </span>
+                              <span className="uppercase text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                                {activeQ.type}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-[10px] text-rose-500 font-bold">
+                                Security warnings used: {cbtTabSwitches} / 3
+                              </span>
+                              <span className={`inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full font-black tracking-wide ${cbtSecondsLeft < 120 ? 'bg-rose-50 text-rose-600 animate-pulse border border-rose-150' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                                <Clock size={14} className={cbtSecondsLeft < 120 ? "animate-bounce" : "animate-spin"} /> Timer: {formatCountdown(cbtSecondsLeft)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Dual panel layout for Reading Comprehension or standard full width */}
+                          <div className={activeQ.passage ? "grid lg:grid-cols-2 gap-8 items-stretch" : "space-y-6"}>
+                            
+                            {/* COMPREHENSION PASSAGE COLUMN */}
+                            {activeQ.passage && (
+                              <div className="p-5 bg-amber-50/40 border border-amber-150 rounded-2xl flex flex-col justify-start max-h-[350px] overflow-y-auto shadow-inner">
+                                <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest mb-3 flex items-center gap-1">
+                                  📖 READING COMPREHENSION PASSAGE
                                 </span>
-                                {opt}
-                              </button>
-                            ))}
+                                <p className="text-xs leading-relaxed font-serif text-slate-700 whitespace-pre-line antialiased">
+                                  {activeQ.passage}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* QUESTION BOARD PANEL */}
+                            <div className="space-y-6 flex flex-col justify-center">
+                              {/* Picture illustration renderer for Nursery and Primary */}
+                              {activeQ.pictureSvgCode && (
+                                <div className="flex flex-col items-center gap-2 py-3 bg-slate-50 border border-dashed rounded-2xl mb-2">
+                                  <span className="text-[8px] font-mono font-black uppercase text-slate-400 tracking-widest">Question Graphic Illustration</span>
+                                  <div dangerouslySetInnerHTML={{ __html: activeQ.pictureSvgCode }} className="p-2.5 bg-white border rounded-xl shadow-sm" />
+                                </div>
+                              )}
+
+                              {/* Question sentence */}
+                              {activeQ.type === "FillBlank" ? (
+                                <h4 className="text-sm md:text-xl font-black text-[#111827] leading-relaxed uppercase select-none">
+                                  {activeQ.question.split("_______")[0]}
+                                  <span className="inline-block px-3 py-1 mx-1.5 border-b-2 border-amber-500 bg-amber-50 text-amber-950 font-black rounded-lg min-w-[120px] text-center text-xs md:text-sm shadow-inner">
+                                    {selectedAnswer || "_______"}
+                                  </span>
+                                  {activeQ.question.split("_______")[1]}
+                                </h4>
+                              ) : (
+                                <h4 className="text-sm md:text-xl font-black text-[#111827] leading-relaxed uppercase select-none">
+                                  {activeQ.question}
+                                </h4>
+                              )}
+
+                              {/* ANSWERS INPUT AND SELECTION BLOCK */}
+                              {activeQ.type === "Matching" && activeQ.matchingPairs ? (
+                                <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 space-y-4">
+                                  <div className="grid grid-cols-2 text-[9px] font-black uppercase text-slate-400 pb-2 border-b">
+                                    <span>Left Column</span>
+                                    <span>Right Assignment Selector</span>
+                                  </div>
+                                  <div className="space-y-3">
+                                    {activeQ.matchingPairs.map((pair, pIdx) => {
+                                      const rowValue = getMatchingValueForLeftItem(pair.left);
+                                      return (
+                                        <div key={pIdx} className="grid grid-cols-2 gap-4 items-center">
+                                          <span className="text-xs font-bold text-slate-700">{pair.left}</span>
+                                          <select
+                                            value={rowValue}
+                                            onChange={(e) => handleMatchingSelect(pair.left, e.target.value)}
+                                            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:border-amber-500 outline-none w-full"
+                                          >
+                                            <option value="">-- Choose Match --</option>
+                                            {activeQ.options.map((opt, oIdx) => (
+                                              <option key={oIdx} value={opt}>{opt}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  <p className="text-[10px] text-slate-400 font-semibold italic">Complete matching rows to automatically construct answer parameters.</p>
+                                </div>
+                              ) : (
+                                <div className="grid gap-3.5 mt-4">
+                                  {activeQ.options.map((opt, i) => (
+                                    <button
+                                      key={i}
+                                      type="button"
+                                      onClick={() => handleCbtAnswerSelect(opt)}
+                                      className={`w-full p-4 rounded-xl text-left border cursor-pointer duration-200 flex items-center justify-between group ${
+                                        selectedAnswer === opt 
+                                          ? 'bg-amber-50/90 text-amber-950 border-amber-400 font-extrabold translate-x-1 shadow-sm' 
+                                          : 'bg-white text-slate-650 hover:bg-slate-50 border-slate-200'
+                                      }`}
+                                    >
+                                      <div className="flex items-center">
+                                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg font-mono font-black text-[10px] mr-3 shadow-sm uppercase ${selectedAnswer === opt ? 'bg-amber-500 text-white border-amber-500' : 'bg-slate-100 border text-slate-400'}`}>
+                                          {String.fromCharCode(65 + i)}
+                                        </span>
+                                        <span className="text-xs font-bold">{opt}</span>
+                                      </div>
+                                      {selectedAnswer === opt && (
+                                        <Check size={14} className="text-amber-600 animate-pulse" />
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Navigation Buttons Row */}
+                          <div className="flex justify-between items-center pt-6 border-t border-slate-150">
+                            <span className="text-[10px] uppercase font-mono font-extrabold text-slate-400">
+                              Stable Auto-saving Active
+                            </span>
+                            <button
+                              type="button"
+                              disabled={!selectedAnswer}
+                              onClick={handleNextCbtQuestion}
+                              className="px-8 py-3.5 bg-primary text-white rounded-xl font-extrabold text-xs uppercase tracking-wider flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-lg hover:bg-opacity-95 duration-200 transition-all hover:scale-[1.01]"
+                            >
+                              {currentCbtQuestionIndex === cbtQuestions.length - 1 ? 'Calculate Score' : 'Next Question'}
+                              <ArrowRight size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {cbtStep === 'results' && (
+                      <div className="bg-emerald-50/50 border border-emerald-100 rounded-[32px] p-8 md:p-12 text-center space-y-6 shadow-sm animate-in fade-in duration-300">
+                        <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-500 mx-auto animate-pulse border border-emerald-100">
+                          <Award size={30} />
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Entrance Exam Grade Report Card</h4>
+                          <h3 className="text-2xl font-black text-slate-800 uppercase">Aptitude CBT Score Aggregated</h3>
+                        </div>
+
+                        {/* Bento Tally Grid of Results */}
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-lg mx-auto">
+                          <div className="p-4 bg-white border rounded-2xl shadow-sm text-center">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Mathematics</span>
+                            <p className="text-xl font-black text-primary mt-1">{formData.cbtMathScore ?? 0} / 50</p>
+                            <span className="text-[9px] text-slate-400 font-semibold italic">50 Marks Max</span>
+                          </div>
+                          
+                          <div className="p-4 bg-white border rounded-2xl shadow-sm text-center">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">English Language</span>
+                            <p className="text-xl font-black text-primary mt-1">{formData.cbtEnglScore ?? 0} / 50</p>
+                            <span className="text-[9px] text-slate-400 font-semibold italic">50 Marks Max</span>
+                          </div>
+
+                          <div className="p-4 bg-white border rounded-2xl shadow-sm text-center col-span-2 md:col-span-1">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Total Score</span>
+                            <p className="text-xl font-black text-[#eab308] mt-1">{formData.cbtScore ?? 0}%</p>
+                            <span className="text-[9px] text-slate-400 font-semibold italic">Passing: 50%</span>
                           </div>
                         </div>
 
-                        <div className="flex justify-end pt-6 border-t border-slate-100">
-                          <button
-                            type="button"
-                            disabled={!selectedAnswer}
-                            onClick={handleNextCbtQuestion}
-                            className="px-8 py-4 bg-primary text-white rounded-xl font-extrabold text-xs uppercase tracking-wider flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-lg hover:bg-opacity-95 duration-200 transition-all hover:scale-[1.01]"
-                          >
-                            {currentCbtQuestionIndex === (cbtQuestions.length || CBT_QUESTIONS.length) - 1 ? 'Calculate Score' : 'Next Question'}
-                            <ArrowRight size={14} />
-                          </button>
+                        {/* Pass/Fail Status Notification Header */}
+                        <div className="max-w-md mx-auto p-4 rounded-2xl border flex items-center gap-3 justify-center bg-white text-left">
+                          <div className={`p-2.5 rounded-xl ${((formData.cbtScore ?? 0) >= 50) ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-650'}`}>
+                            <CheckCircle size={20} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-slate-800 uppercase">
+                              Status: {((formData.cbtScore ?? 0) >= 50) ? 'PASSED ENTRANCE EXAM' : 'UNDER MINIMUM THRESHOLD'}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-semibold">
+                              {((formData.cbtScore ?? 0) >= 50) 
+                                ? 'Congratulations! Your score meets the academic requirements of Faith Foundation Schools.' 
+                                : 'Your CBT score is below the regular 50% passing coefficient. This file will trigger further manual review by the Admission Board.'}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    )}
 
-                    {cbtStep === 'results' && (
-                      <div className="bg-emerald-50/50 border border-emerald-100 rounded-[32px] p-8 md:p-12 text-center space-y-4 shadow-sm">
-                        <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-505 mx-auto text-emerald-500 animate-pulse">
-                          <Award size={30} />
-                        </div>
-                        <h4 className="text-base font-extrabold text-[#111827] uppercase">Aptitude CBT Score Aggregated</h4>
-                        <div className="text-5xl font-display font-black text-primary">
-                          {formData.cbtScore}%
-                        </div>
-                        <p className="text-xs text-slate-455 max-w-sm mx-auto leading-normal font-semibold">
+                        <p className="text-xs text-slate-400 max-w-sm mx-auto leading-normal font-semibold">
                           Excellent validation coefficients! Score metrics are logged on your candidate folder profile structure and integrated into review decision files.
                         </p>
                       </div>

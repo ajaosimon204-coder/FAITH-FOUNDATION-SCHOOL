@@ -37,7 +37,7 @@ export default function AttendanceTrackerStudent() {
   const { profile } = useAuth();
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [excuseRequests, setExcuseRequests] = useState<ExcuseDutyRequest[]>([]);
-  const [activeStudentId, setActiveStudentId] = useState('FFP/2026/001');
+  const [activeStudentId, setActiveStudentId] = useState(profile?.studentId || profile?.id || '');
   
   // Form submission state
   const [reqDate, setReqDate] = useState('');
@@ -55,7 +55,7 @@ export default function AttendanceTrackerStudent() {
           s.email?.toLowerCase() === profile?.email?.toLowerCase() || 
           s.parentEmail?.toLowerCase() === profile?.email?.toLowerCase()
         );
-        const resolvedId = student?.id || 'FFP/2026/001';
+        const resolvedId = student?.id || profile?.studentId || profile?.id || '';
         setActiveStudentId(resolvedId);
 
         const savedLogs = localStorage.getItem(`ff_attendance_student_logs_${resolvedId}`) || localStorage.getItem('ff_attendance_student_logs');
@@ -64,36 +64,13 @@ export default function AttendanceTrackerStudent() {
         if (savedLogs) {
           setLogs(JSON.parse(savedLogs));
         } else {
-          const defaultLogs: AttendanceLog[] = [
-            { date: '2026-06-01', day: 'Monday', status: 'early', timestamp: '07:44 AM', remark: 'Perfect punctuality record' },
-            { date: '2026-06-02', day: 'Tuesday', status: 'early', timestamp: '07:38 AM', remark: 'Arrived for Devotions early' },
-            { date: '2026-06-03', day: 'Wednesday', status: 'late', timestamp: '08:12 AM', remark: 'Traffic delays at ringroad' },
-            { date: '2026-05-28', day: 'Thursday', status: 'excused', timestamp: '--', remark: 'Approved excuse duty' },
-            { date: '2026-05-29', day: 'Friday', status: 'absent', timestamp: '--', remark: 'Unexcused absentee report' },
-            { date: '2026-05-25', day: 'Monday', status: 'early', timestamp: '07:41 AM', remark: 'Early sign in verified' },
-            { date: '2026-05-26', day: 'Tuesday', status: 'early', timestamp: '07:45 AM', remark: 'On time' },
-            { date: '2026-05-27', day: 'Wednesday', status: 'early', timestamp: '07:35 AM', remark: 'Perfect punctuality record' },
-          ];
-          setLogs(defaultLogs);
-          localStorage.setItem(`ff_attendance_student_logs_${resolvedId}`, JSON.stringify(defaultLogs));
+          setLogs([]);
         }
 
         if (savedReqs) {
           setExcuseRequests(JSON.parse(savedReqs));
         } else {
-          const defaultReqs: ExcuseDutyRequest[] = [
-            {
-              id: 'EXC-2001',
-              dateOfAbsence: '2026-05-28',
-              reason: 'Medical Dental Checkup',
-              details: 'Had to visit the general hospital to pull a wisdom tooth under medical anesthesia.',
-              status: 'approved',
-              requestDate: '2026-05-27',
-              uploadedReceipt: 'hospital_referral_checkup.pdf'
-            }
-          ];
-          setExcuseRequests(defaultReqs);
-          localStorage.setItem(`ff_attendance_student_requests_${resolvedId}`, JSON.stringify(defaultReqs));
+          setExcuseRequests([]);
         }
       });
     });
@@ -223,125 +200,140 @@ export default function AttendanceTrackerStudent() {
           </div>
           <div>
             <span className="text-[9px] uppercase font-bold text-slate-450 tracking-wider text-slate-300">Punctuality Score</span>
-            <p className="text-lg font-extrabold text-blue-400">{punctualityScore}% Rate</p>
+            <p className="text-lg font-extrabold text-blue-400">{totalTracked > 0 ? `${punctualityScore}% Rate` : 'N/A'}</p>
           </div>
         </div>
 
       </div>
 
       {activeTab === 'calendar' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* Detailed logs table column */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 md:p-8 space-y-5 shadow-sm">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-105 pb-3">Latest Check-In Logs & Timestamps</h3>
-              
-              <div className="border border-slate-150 rounded-2xl overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 text-[10px] font-black uppercase tracking-wider">
-                      <th className="py-4 px-5">Day / Date</th>
-                      <th className="py-4 px-4">Verification mark</th>
-                      <th className="py-4 px-4 text-center font-mono">Sign-In Time</th>
-                      <th className="py-4 px-5">Administrative Comments</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs">
-                    {logs.map((log, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-4 px-5 font-bold text-slate-850">
-                          <div>{log.day}</div>
-                          <span className="text-[10px] font-mono text-slate-400 font-medium">{log.date}</span>
-                        </td>
-                        <td className="py-4 px-4">
-                          {log.status === 'early' && (
-                            <span className="bg-green-50 text-green-700 border border-green-150 px-2 py-0.5 rounded text-[10px] font-black uppercase inline-block">Early</span>
-                          )}
-                          {log.status === 'late' && (
-                            <span className="bg-amber-50 text-amber-700 border border-amber-150 px-2 py-0.5 rounded text-[10px] font-black uppercase inline-block">Late arrival</span>
-                          )}
-                          {log.status === 'absent' && (
-                            <span className="bg-rose-50 text-rose-700 border border-rose-150 px-2 py-0.5 rounded text-[10px] font-black uppercase inline-block">Absent</span>
-                          )}
-                          {log.status === 'excused' && (
-                            <span className="bg-blue-50 text-blue-700 border border-blue-150 px-2 py-0.5 rounded text-[10px] font-black uppercase inline-block">Excused</span>
-                          )}
-                        </td>
-                        <td className="py-4 px-4 text-center font-mono font-extrabold text-slate-650">{log.timestamp}</td>
-                        <td className="py-4 px-5 text-slate-500 italic font-medium">{log.remark}</td>
+        logs.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center space-y-4 shadow-sm max-w-xl mx-auto my-6">
+            <div className="w-16 h-16 bg-slate-50 border border-slate-150 rounded-2xl flex items-center justify-center mx-auto text-slate-400">
+              <CalendarIcon size={28} />
+            </div>
+            <h3 className="text-md font-bold text-slate-800 uppercase tracking-tight">No attendance records available.</h3>
+            <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto font-semibold">
+              Class teachers mark daily attendance. Attendance logs & check-in times will populate automatically once real records are entered.
+            </p>
+            <div className="p-3 bg-slate-50 border border-slate-150 rounded-xl max-w-xs mx-auto text-[10px] text-slate-400 font-mono tracking-wider">
+              Query: ATTENDANCE-NOT-FOUND // Status: Synchronized
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Detailed logs table column */}
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-white rounded-3xl border border-slate-200 p-6 md:p-8 space-y-5 shadow-sm">
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-105 pb-3">Latest Check-In Logs & Timestamps</h3>
+                
+                <div className="border border-slate-150 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 text-[10px] font-black uppercase tracking-wider">
+                        <th className="py-4 px-5">Day / Date</th>
+                        <th className="py-4 px-4">Verification mark</th>
+                        <th className="py-4 px-4 text-center font-mono">Sign-In Time</th>
+                        <th className="py-4 px-5">Administrative Comments</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          {/* Visual Heatmap widget */}
-          <div>
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4 shadow-sm text-center">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest text-left border-b border-slate-100 pb-2.5">Monthly Heatmap Grid</h3>
-              
-              <div className="grid grid-cols-7 gap-2 text-center text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
-                <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
-              </div>
-              
-              <div className="grid grid-cols-7 gap-1.5">
-                {/* Visual grid representations */}
-                {Array.from({ length: 28 }).map((_, idx) => {
-                  let colorClass = 'bg-slate-100 border border-slate-150 hover:bg-slate-200';
-                  let tip = 'Present & Early';
-                  if (idx % 7 === 5 || idx % 7 === 6) {
-                    colorClass = 'bg-slate-50 text-slate-300 border border-dashed border-slate-150 cursor-not-allowed';
-                    tip = 'Weekend';
-                  } else if (idx === 2) {
-                    colorClass = 'bg-amber-400 text-white border border-amber-500';
-                    tip = 'Late marking';
-                  } else if (idx === 10 || idx === 18) {
-                    colorClass = 'bg-rose-500 text-white border border-rose-600';
-                    tip = 'Absent';
-                  } else if (idx === 14) {
-                    colorClass = 'bg-blue-500 text-white border border-blue-600';
-                    tip = 'Excused Leave';
-                  } else if (idx < 20) {
-                    colorClass = 'bg-emerald-500 text-white border border-emerald-600';
-                  }
-                  
-                  return (
-                    <div 
-                      key={idx} 
-                      title={tip}
-                      className={`h-7 rounded-lg flex items-center justify-center font-semibold cursor-pointer text-[10px] transition-all hover:scale-[1.1] ${colorClass}`}
-                    >
-                      {idx + 1}
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 grid grid-cols-2 gap-2 text-[9px] font-black uppercase text-slate-450 tracking-tight text-left">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded"></span>
-                  <span>Present / Early</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 bg-amber-400 rounded"></span>
-                  <span>Arrived Late</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 bg-rose-500 rounded"></span>
-                  <span>Absent</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 bg-blue-500 rounded"></span>
-                  <span>Excused absence</span>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {logs.map((log, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 px-5 font-bold text-slate-850">
+                            <div>{log.day}</div>
+                            <span className="text-[10px] font-mono text-slate-400 font-medium">{log.date}</span>
+                          </td>
+                          <td className="py-4 px-4">
+                            {log.status === 'early' && (
+                              <span className="bg-green-50 text-green-700 border border-green-150 px-2 py-0.5 rounded text-[10px] font-black uppercase inline-block">Early</span>
+                            )}
+                            {log.status === 'late' && (
+                              <span className="bg-amber-50 text-amber-700 border border-amber-150 px-2 py-0.5 rounded text-[10px] font-black uppercase inline-block">Late arrival</span>
+                            )}
+                            {log.status === 'absent' && (
+                              <span className="bg-rose-50 text-rose-700 border border-rose-150 px-2 py-0.5 rounded text-[10px] font-black uppercase inline-block">Absent</span>
+                            )}
+                            {log.status === 'excused' && (
+                              <span className="bg-blue-50 text-blue-700 border border-blue-150 px-2 py-0.5 rounded text-[10px] font-black uppercase inline-block">Excused</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-center font-mono font-extrabold text-slate-650">{log.timestamp}</td>
+                          <td className="py-4 px-5 text-slate-500 italic font-medium">{log.remark}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
-          </div>
 
-        </div>
+            {/* Visual Heatmap widget */}
+            <div>
+              <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4 shadow-sm text-center">
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest text-left border-b border-slate-100 pb-2.5">Monthly Heatmap Grid</h3>
+                
+                <div className="grid grid-cols-7 gap-2 text-center text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                  <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+                </div>
+                
+                <div className="grid grid-cols-7 gap-1.5">
+                  {/* Visual grid representations */}
+                  {Array.from({ length: 28 }).map((_, idx) => {
+                    let colorClass = 'bg-slate-100 border border-slate-150 hover:bg-slate-200';
+                    let tip = 'Present & Early';
+                    if (idx % 7 === 5 || idx % 7 === 6) {
+                      colorClass = 'bg-slate-50 text-slate-300 border border-dashed border-slate-150 cursor-not-allowed';
+                      tip = 'Weekend';
+                    } else if (idx === 2) {
+                      colorClass = 'bg-amber-400 text-white border border-amber-500';
+                      tip = 'Late marking';
+                    } else if (idx === 10 || idx === 18) {
+                      colorClass = 'bg-rose-500 text-white border border-rose-600';
+                      tip = 'Absent';
+                    } else if (idx === 14) {
+                      colorClass = 'bg-blue-500 text-white border border-blue-600';
+                      tip = 'Excused Leave';
+                    } else if (idx < 20) {
+                      colorClass = 'bg-emerald-500 text-white border border-emerald-600';
+                    }
+                    
+                    return (
+                      <div 
+                        key={idx} 
+                        title={tip}
+                        className={`h-7 rounded-lg flex items-center justify-center font-semibold cursor-pointer text-[10px] transition-all hover:scale-[1.1] ${colorClass}`}
+                      >
+                        {idx + 1}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 grid grid-cols-2 gap-2 text-[9px] font-black uppercase text-slate-450 tracking-tight text-left">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 bg-emerald-500 rounded"></span>
+                    <span>Present / Early</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 bg-amber-400 rounded"></span>
+                    <span>Arrived Late</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 bg-rose-500 rounded"></span>
+                    <span>Absent</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 bg-blue-500 rounded"></span>
+                    <span>Excused absence</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )
       )}
 
       {activeTab === 'excuse' && (

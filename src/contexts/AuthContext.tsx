@@ -108,21 +108,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('faith_foundation_sandbox_session', JSON.stringify(session));
     setUser(mockUser);
     setProfile(studentProfile);
-    setIsSandbox(true);
+    setIsSandbox(false);
     setLoading(false);
 
     // Also sync ff_student_report_card to let dashboards read results correctly
     const studentReportCardsMapStr = localStorage.getItem('ff_student_report_cards_map');
+    let hasCard = false;
     if (studentReportCardsMapStr) {
       try {
         const map = JSON.parse(studentReportCardsMapStr);
         const studentCard = map[student.id];
         if (studentCard) {
           localStorage.setItem('ff_student_report_card', JSON.stringify(studentCard));
+          hasCard = true;
         }
       } catch (e) {
         console.error(e);
       }
+    }
+    if (!hasCard) {
+      localStorage.removeItem('ff_student_report_card');
     }
   };
 
@@ -160,7 +165,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (parsed && parsed.user && parsed.profile) {
           setUser(parsed.user);
           setProfile(parsed.profile);
-          setIsSandbox(true);
+          setIsSandbox(parsed.profile?.role !== 'student');
           setLoading(false);
           return;
         }

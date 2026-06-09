@@ -20,6 +20,26 @@ import {
   Cloud
 } from 'lucide-react';
 
+function hasCompletedTermlyExam(profile: any) {
+  if (!profile) return false;
+  const studentId = profile.studentId || profile.id;
+  if (!studentId) return false;
+
+  const savedMapStr = localStorage.getItem('ff_student_report_cards_map');
+  if (savedMapStr) {
+    try {
+      const map = JSON.parse(savedMapStr);
+      const studentCard = map[studentId];
+      if (studentCard && !studentCard.noExamData) {
+        return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  return false;
+}
+
 export const Sidebar = () => {
   const { profile, activeRole } = useAuth();
   const role = activeRole;
@@ -57,7 +77,11 @@ export const Sidebar = () => {
     { to: '/dashboard/locker', icon: Cloud, label: 'Cloud Locker' },
   ];
 
-  const links = role === 'admin' ? adminLinks : role === 'staff' ? staffLinks : studentLinks;
+  const links = role === 'admin' 
+    ? adminLinks 
+    : role === 'staff' 
+      ? staffLinks 
+      : studentLinks;
 
   return (
     <aside className="w-64 bg-primary flex flex-col p-6 text-white shrink-0 h-screen fixed left-0 top-0 overflow-y-auto hidden lg:flex">

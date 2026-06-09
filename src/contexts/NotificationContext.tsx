@@ -25,14 +25,14 @@ interface NotificationContextType {
 const NotificationContext = React.createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const { user, isSandbox } = useAuth();
+  const { user, profile, isSandbox } = useAuth();
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   React.useEffect(() => {
-    if (!user || isSandbox) {
+    if (!user || isSandbox || profile?.role === 'student') {
       setNotifications([]);
       setLoading(false);
       return;

@@ -19,10 +19,7 @@ export interface Announcement {
 export async function syncFetchAnnouncements(): Promise<Announcement[]> {
   const localKey = 'ff_announcements';
   const localSaved = localStorage.getItem(localKey);
-  const fallback = localSaved ? JSON.parse(localSaved) : [
-    { id: 1, title: 'Term 1 Exam Schedules Released', body: 'All terminal examinations for the middle school commence next Wednesday.', date: 'May 20, 2026', type: 'critical' },
-    { id: 2, title: 'Annual Inter-House Sports Fiesta', body: 'Parents and teachers are invited to secure our green track on Friday morning.', date: 'May 18, 2026', type: 'general' }
-  ];
+  const fallback = localSaved ? JSON.parse(localSaved) : [];
 
   if (isSandbox() || !isSupabaseConfigured) {
     return fallback;
@@ -37,9 +34,9 @@ export async function syncFetchAnnouncements(): Promise<Announcement[]> {
 
     if (error) {
       if (error.code === 'PGRST116') {
-        // Document doesn't exist, create it with fallback
-        await supabase.from('site').upsert({ id: 'announcements', content: fallback });
-        return fallback;
+        // Document doesn't exist, create it with empty fallback
+        await supabase.from('site').upsert({ id: 'announcements', content: [] });
+        return [];
       }
       throw error;
     }
@@ -49,7 +46,7 @@ export async function syncFetchAnnouncements(): Promise<Announcement[]> {
       localStorage.setItem(localKey, JSON.stringify(list));
       return list;
     }
-    return fallback;
+    return [];
   } catch (err) {
     console.warn('Sync read announcements failed, using local fallback:', err);
     return fallback;
@@ -102,49 +99,7 @@ export interface StudentRecord {
 export async function syncFetchStudents(): Promise<StudentRecord[]> {
   const localKey = 'ff_students';
   const localSaved = localStorage.getItem(localKey);
-  const fallback = localSaved ? JSON.parse(localSaved) : [
-    { 
-      id: 'FFP/2026/001', 
-      name: 'Oluwaseun Adewole', 
-      class: 'SS 3', 
-      status: 'Enrolled', 
-      fees: 'Cleared',
-      parentName: 'Mr. Adewole',
-      parentPhone: '0812233455', // standardized
-      parentEmail: 'adewole@gmail.com',
-      dob: '2010-04-12',
-      medicalInfo: 'Alineated left wrist. Clean file.',
-      allergies: 'Shellfish',
-      academicHistory: [
-        { subject: 'Mathematics', score: 88, term: '3rd Term 25/26' },
-        { subject: 'English Language', score: 92, term: '3rd Term 25/26' },
-        { subject: 'Physics', score: 81, term: '3rd Term 25/26' }
-      ],
-      communicationLogs: [
-        { date: 'May 10, 2026', message: 'Informed parent about terminal physics lab fees.', caller: 'Admin' }
-      ]
-    },
-    { 
-      id: 'FFP/2026/002', 
-      name: 'Chioma Nwachukwu', 
-      class: 'JSS 1', 
-      status: 'Enrolled', 
-      fees: 'Debt',
-      parentName: 'Mrs. Nwachukwu',
-      parentPhone: '07033445566',
-      parentEmail: 'nwachukwu.c@gmail.com',
-      dob: '2014-08-05',
-      medicalInfo: 'Asthmatic. Safe inhaler in physical instructor desk.',
-      allergies: 'Dust, Penicillin',
-      academicHistory: [
-        { subject: 'Mathematics', score: 72, term: '3rd Term 25/26' },
-        { subject: 'English Language', score: 85, term: '3rd Term 25/26' }
-      ],
-      communicationLogs: [
-        { date: 'May 15, 2026', message: 'Sent SMS reminder regarding school fees balance.', caller: 'Bursar' }
-      ]
-    }
-  ];
+  const fallback = localSaved ? JSON.parse(localSaved) : [];
 
   if (isSandbox() || !isSupabaseConfigured) {
     return fallback;
@@ -178,26 +133,7 @@ export async function syncFetchStudents(): Promise<StudentRecord[]> {
       localStorage.setItem(localKey, JSON.stringify(records));
       return records;
     } else {
-      // Seed fallback students to database if table empty
-      for (const item of fallback) {
-        await supabase.from('students').insert({
-          id: item.id,
-          name: item.name,
-          class: item.class,
-          status: item.status,
-          fees: item.fees,
-          parent_name: item.parentName,
-          parent_phone: item.parentPhone,
-          parent_email: item.parentEmail,
-          dob: item.dob,
-          medical_info: item.medicalInfo,
-          allergies: item.allergies,
-          academic_history: item.academicHistory,
-          communication_logs: item.communicationLogs,
-          photo_url: item.photoUrl || ''
-        });
-      }
-      return fallback;
+      return [];
     }
   } catch (err) {
     console.warn('Sync read students failed, using fallback:', err);
@@ -602,10 +538,7 @@ export interface FeeStructure {
 export async function syncFetchFeeStructures(): Promise<FeeStructure[]> {
   const localKey = 'ff_fee_structures';
   const localSaved = localStorage.getItem(localKey);
-  const fallback = localSaved ? JSON.parse(localSaved) : [
-    { id: 'FEE-001', title: 'Tuition Fees', amount: 150000, class: 'JSS 1' },
-    { id: 'FEE-002', title: 'Science Lab terminal levies', amount: 25000, class: 'SS 3' }
-  ];
+  const fallback = localSaved ? JSON.parse(localSaved) : [];
 
   if (isSandbox() || !isSupabaseConfigured) {
     return fallback;
@@ -625,15 +558,7 @@ export async function syncFetchFeeStructures(): Promise<FeeStructure[]> {
       localStorage.setItem(localKey, JSON.stringify(records));
       return records;
     } else {
-      for (const f of fallback) {
-        await supabase.from('fee_structures').insert({
-          id: f.id,
-          title: f.title,
-          amount: f.amount,
-          target_class: f.class
-        });
-      }
-      return fallback;
+      return [];
     }
   } catch (err) {
     console.warn('Sync fetch fee_structures failed:', err);

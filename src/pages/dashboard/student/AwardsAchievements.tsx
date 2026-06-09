@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../../contexts/AuthContext';
 import { 
   Trophy, 
   Award, 
@@ -36,43 +37,94 @@ interface LeaderboardUser {
 }
 
 export default function AwardsAchievements() {
+  const { profile } = useAuth();
   const [achievements, setAchievements] = useState<MedalBadge[]>([]);
   const [leaderboardList, setLeaderboardList] = useState<LeaderboardUser[]>([]);
+  const [attendanceRate, setAttendanceRate] = useState<number>(0);
+
+  const activeStudentName = profile?.full_name || profile?.name || profile?.student_name || 'Student';
+  const activeClass = profile?.studentClass || profile?.class || 'Assigned Class';
 
   useEffect(() => {
-    const savedAchivements = localStorage.getItem('ff_student_achievements');
+    const studentId = profile?.studentId || profile?.id || '';
+    if (!studentId) return;
+
+    // Load actual student achievements
+    const savedAchivements = localStorage.getItem(`ff_student_achievements_${studentId}`) || localStorage.getItem('ff_student_achievements');
+    let loadedAchievements: MedalBadge[] = [];
     if (savedAchivements) {
-      setAchievements(JSON.parse(savedAchivements));
+      loadedAchievements = JSON.parse(savedAchivements);
+      setAchievements(loadedAchievements);
     } else {
-      const defaultAchievements: MedalBadge[] = [
-        { id: 'AW-01', title: 'Honor Roll Shield', rarity: 'Legendary', desc: 'Maintain an academic cumulative GPA above 4.5/5.0 across an entire scholastic term cycle.', xpPoints: 500, unlocked: true, unlockedDate: 'Dec 18, 2025', icon: '🏆', color: 'from-amber-400 to-yellow-600' },
-        { id: 'AW-02', title: 'CBT Champion Crown', rarity: 'Rare', desc: 'Secure a perfect 100% score on any automated Computer-Based testing (CBT) modules on the platform.', xpPoints: 250, unlocked: true, unlockedDate: 'Apr 02, 2026', icon: '👑', color: 'from-blue-400 to-indigo-600' },
-        { id: 'AW-03', title: 'Perfect Attendance Flag', rarity: 'Rare', desc: 'Achieve 100% attendance check-ins throughout an active school term period without excuse excuses.', xpPoints: 200, unlocked: false, icon: '📅', color: 'from-emerald-400 to-teal-605' },
-        { id: 'AW-04', title: 'Spiritual Torchbearer', rarity: 'Common', desc: 'Recognized by course mentors for consistent moral leadership, service, and chapel participation.', xpPoints: 150, unlocked: true, unlockedDate: 'Mar 15, 2026', icon: '🔥', color: 'from-rose-450 to-orange-600' },
-        { id: 'AW-05', title: 'Junior Mathematician Badge', rarity: 'Common', desc: 'Attain the highest class grade in Further Mathematics terminal examinations.', xpPoints: 100, unlocked: true, unlockedDate: 'Nov 12, 2025', icon: '📐', color: 'from-cyan-400 to-blue-600' }
-      ];
-      setAchievements(defaultAchievements);
-      localStorage.setItem('ff_student_achievements', JSON.stringify(defaultAchievements));
+      setAchievements([]);
     }
 
-    const savedLeaderboard = localStorage.getItem('ff_student_leaderboard');
-    if (savedLeaderboard) {
-      setLeaderboardList(JSON.parse(savedLeaderboard));
-    } else {
-      const defaultLeaderboard: LeaderboardUser[] = [
-        { rank: 1, name: 'Ajao Demola Simon', avatarLetter: 'D', points: 1450, role: 'SS3 Science (You)', status: 'fire' },
-        { rank: 2, name: 'Ogunlesi Tolulope', avatarLetter: 'T', points: 1280, role: 'SS3 Science', status: 'streak' },
-        { rank: 3, name: 'Balogun Chidi Eze', avatarLetter: 'C', points: 1190, role: 'SS3 Science', status: 'normal' },
-        { rank: 4, name: 'Adeniyi Amina Ibrahim', avatarLetter: 'A', points: 1110, role: 'SS3 Science', status: 'streak' },
-        { rank: 5, name: 'Nwachukwu Kenechi', avatarLetter: 'K', points: 950, role: 'SS3 Arts', status: 'normal' }
-      ];
-      setLeaderboardList(defaultLeaderboard);
-      localStorage.setItem('ff_student_leaderboard', JSON.stringify(defaultLeaderboard));
+    const earned = loadedAchievements.filter(a => a.unlocked);
+    const calculatedTotalXp = earned.reduce((acc, current) => acc + current.xpPoints, 0);
+
+    // Load actual student attendance percentage
+    const savedLogs = localStorage.getItem(`ff_attendance_student_logs_${studentId}`) || localStorage.getItem('ff_attendance_student_logs');
+    if (savedLogs) {
+      try {
+        const logsParsed = JSON.parse(savedLogs);
+        if (Array.isArray(logsParsed) && logsParsed.length > 0) {
+          const presentCount = logsParsed.filter((l: any) => l.status === 'present' || l.status === 'late').length;
+          setAttendanceRate(Math.round((presentCount / logsParsed.length) * 100));
+        }
+      } catch (e) {
+        console.error('Error calculating attendance rate:', e);
+      }
     }
-  }, []);
+
+    // Load scoreboard leaderboard
+    const savedLeaderboard = localStorage.getItem(`ff_student_leaderboard_${studentId}`) || localStorage.getItem('ff_student_leaderboard');
+    if (savedLeaderboard) {
+      try {
+        const parsed = JSON.parse(savedLeaderboard);
+        let updated = parsed.map((item: any) => {
+          const isSelf = item.studentId === studentId || item.name?.toLowerCase() === activeStudentName.toLowerCase() || item.name === 'Ajao Demola Simon';
+          if (isSelf) {
+            return {
+              ...item,
+              name: activeStudentName,
+              studentId: studentId,
+              avatarLetter: activeStudentName.charAt(0).toUpperCase(),
+              points: calculatedTotalXp,
+              role: `${activeClass} (You)`
+            };
+          }
+          return item;
+        });
+
+        updated.sort((a: any, b: any) => b.points - a.points);
+        updated = updated.map((item: any, idx: number) => ({
+          ...item,
+          rank: idx + 1
+        }));
+        setLeaderboardList(updated);
+      } catch (e) {
+        console.error(e);
+      }
+    } else {
+      setLeaderboardList([
+        {
+          rank: 1,
+          name: activeStudentName,
+          avatarLetter: activeStudentName.charAt(0).toUpperCase(),
+          points: calculatedTotalXp,
+          role: `${activeClass} (You)`,
+          status: 'fire'
+        }
+      ]);
+    }
+  }, [activeStudentName, activeClass, profile]);
 
   const earnedAwards = achievements.filter(a => a.unlocked);
   const totalXp = earnedAwards.reduce((acc, current) => acc + current.xpPoints, 0);
+
+  const myRankItem = leaderboardList.find(x => x.name === activeStudentName || x.role.includes('(You)'));
+  const myRankText = myRankItem ? `Ranked Number #${myRankItem.rank} in ${activeClass} Group` : 'Establishing Standing';
+  const myLevel = totalXp >= 400 ? 'XP Level 4' : totalXp >= 200 ? 'XP Level 3' : totalXp >= 100 ? 'XP Level 2' : 'XP Level 1';
 
   return (
     <div className="space-y-8 font-sans pb-16">
@@ -107,11 +159,11 @@ export default function AwardsAchievements() {
             <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">AGGREGATE XP POINTS</span>
             <div className="flex items-end gap-2">
               <p className="text-4xl font-black font-display text-white">{totalXp}</p>
-              <span className="text-xs font-mono text-amber-400 mb-1 font-bold">XP Level 4</span>
+              <span className="text-xs font-mono text-amber-400 mb-1 font-bold">{myLevel}</span>
             </div>
           </div>
           <div className="text-[10px] text-slate-400 italic">
-            Ranked Number #1 in S3 Science Class Group!
+            {myRankText}
           </div>
         </div>
 
@@ -125,9 +177,15 @@ export default function AwardsAchievements() {
             <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Earned Medals</span>
             <p className="text-3xl font-black font-display text-slate-800">{earnedAwards.length} / {achievements.length}</p>
           </div>
-          <p className="text-[10px] text-slate-500 italic">
-            You unlocked the rare <span className="font-bold text-slate-700">CBT Champion Crown</span> last month!
-          </p>
+          {earnedAwards.length > 0 ? (
+            <p className="text-[10px] text-slate-500 italic leading-relaxed">
+              You unlocked the rare <span className="font-bold text-slate-700">{earnedAwards[0].title}</span> award!
+            </p>
+          ) : (
+            <p className="text-[10px] text-slate-400 italic leading-relaxed">
+              Earn special merits to unlock structural performance badges.
+            </p>
+          )}
         </div>
 
         {/* Milestone checklist card */}
@@ -140,10 +198,10 @@ export default function AwardsAchievements() {
             <span className="text-[9px] uppercase font-bold text-slate-450 tracking-wider">Next Unlock: "Attendance Star"</span>
             <div className="flex justify-between text-[11px] font-bold text-slate-650 mt-1">
               <span>Class attendance progress</span>
-              <span className="font-mono text-primary font-black">94.2% / 100%</span>
+              <span className="font-mono text-primary font-black">{attendanceRate}% / 100%</span>
             </div>
             <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mt-11">
-              <div className="h-full bg-primary" style={{ width: '94.2%' }}></div>
+              <div className="h-full bg-primary" style={{ width: `${attendanceRate}%` }}></div>
             </div>
           </div>
         </div>
@@ -158,54 +216,62 @@ export default function AwardsAchievements() {
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-105 pb-3">Digital Trophy & Badges Shelf</h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {achievements.map((badge) => (
-                <div 
-                  key={badge.id}
-                  className={`p-5 rounded-2xl border flex flex-col justify-between gap-4 transition-all ${
-                    badge.unlocked 
-                      ? 'bg-gradient-to-br from-white to-slate-50 border-slate-200 hover:shadow-md' 
-                      : 'bg-slate-50/25 border-dashed border-slate-200 opacity-60'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex gap-3 items-center">
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-tr ${badge.color} text-white flex items-center justify-center text-xl shadow-md shrink-0`}>
-                        {badge.icon}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight">{badge.title}</h4>
-                        </div>
-                        <span className={`text-[9px] font-black uppercase inline-block font-mono mt-0.5 ${
-                          badge.rarity === 'Legendary' 
-                            ? 'text-amber-600' 
-                            : badge.rarity === 'Rare' 
-                              ? 'text-blue-600' 
-                              : 'text-slate-500'
-                        }`}>
-                          {badge.rarity} &middot; <span className="font-bold text-primary">+{badge.xpPoints} XP</span>
-                        </span>
-                      </div>
-                    </div>
-
-                    <div>
-                      {badge.unlocked ? (
-                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">unlocked</span>
-                      ) : (
-                        <span className="bg-slate-100 text-slate-400 border text-[8px] font-black px-1.5 py-0.5 rounded uppercase flex items-center gap-0.5"><Clock size={8} /> locked</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-500 font-medium leading-relaxed">{badge.desc}</p>
-
-                  {badge.unlocked && badge.unlockedDate && (
-                    <div className="text-[9px] text-slate-400 font-mono flex items-center gap-1 border-t border-slate-100 pt-2.5">
-                      <CheckCircle size={10} className="text-emerald-500" /> Unlocked date: {badge.unlockedDate}
-                    </div>
-                  )}
+              {achievements.length === 0 ? (
+                <div className="col-span-1 md:col-span-2 text-center py-12 space-y-3">
+                  <div className="text-3xl">🏆</div>
+                  <p className="text-xs font-black uppercase text-slate-800 tracking-wider">No awards available</p>
+                  <p className="text-[10px] text-slate-450 max-w-xs mx-auto font-semibold leading-relaxed">Your honors, merits, and special academic badges will show up here once assigned by the school staff.</p>
                 </div>
-              ))}
+              ) : (
+                achievements.map((badge) => (
+                  <div 
+                    key={badge.id}
+                    className={`p-5 rounded-2xl border flex flex-col justify-between gap-4 transition-all ${
+                      badge.unlocked 
+                        ? 'bg-gradient-to-br from-white to-slate-50 border-slate-200 hover:shadow-md' 
+                        : 'bg-slate-50/25 border-dashed border-slate-200 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex gap-3 items-center">
+                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-tr ${badge.color} text-white flex items-center justify-center text-xl shadow-md shrink-0`}>
+                          {badge.icon}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight">{badge.title}</h4>
+                          </div>
+                          <span className={`text-[9px] font-black uppercase inline-block font-mono mt-0.5 ${
+                            badge.rarity === 'Legendary' 
+                              ? 'text-amber-600' 
+                              : badge.rarity === 'Rare' 
+                                ? 'text-blue-600' 
+                                : 'text-slate-500'
+                          }`}>
+                            {badge.rarity} &middot; <span className="font-bold text-primary">+{badge.xpPoints} XP</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        {badge.unlocked ? (
+                          <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">unlocked</span>
+                        ) : (
+                          <span className="bg-slate-100 text-slate-400 border text-[8px] font-black px-1.5 py-0.5 rounded uppercase flex items-center gap-0.5"><Clock size={8} /> locked</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed">{badge.desc}</p>
+
+                    {badge.unlocked && badge.unlockedDate && (
+                      <div className="text-[9px] text-slate-400 font-mono flex items-center gap-1 border-t border-slate-100 pt-2.5">
+                        <CheckCircle size={10} className="text-emerald-500" /> Unlocked date: {badge.unlockedDate}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -218,55 +284,61 @@ export default function AwardsAchievements() {
                 <TrendingUp size={14} className="text-primary" />
                 Class Standings Leaderboard
               </h3>
-              <p className="text-[10px] text-slate-400 mt-1 uppercase font-semibold">SS3 Science Stream - Year 25/26</p>
+              <p className="text-[10px] text-slate-400 mt-1 uppercase font-semibold">{achievements.length > 0 ? "SS3 Science Stream - Year 25/26" : "No standings"}</p>
             </div>
 
             <div className="space-y-2.5">
-              {leaderboardList.map((user) => {
-                const isDemola = user.name === 'Ajao Demola Simon';
-                return (
-                  <div 
-                    key={user.rank}
-                    className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 transition-colors ${
-                      isDemola 
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-md' 
-                        : 'bg-slate-50/70 hover:bg-slate-50 border-slate-150/40'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className={`text-xs font-mono font-black w-4 text-center ${
-                        isDemola 
-                          ? 'text-amber-400' 
-                          : 'text-slate-400'
-                      }`}>
-                        #{user.rank}
-                      </span>
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${
-                        isDemola 
-                          ? 'bg-amber-400 text-slate-900' 
-                          : 'bg-white border text-primary border-slate-100'
-                      }`}>
-                        {user.avatarLetter}
+              {leaderboardList.length === 0 ? (
+                <div className="text-center py-6 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
+                  No standings available.
+                </div>
+              ) : (
+                leaderboardList.map((user) => {
+                  const isMe = user.name === activeStudentName;
+                  return (
+                    <div 
+                      key={user.rank}
+                      className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 transition-colors ${
+                        isMe 
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-md' 
+                          : 'bg-slate-50/70 hover:bg-slate-50 border-slate-150/40'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs font-mono font-black w-4 text-center ${
+                          isMe 
+                            ? 'text-amber-400' 
+                            : 'text-slate-400'
+                        }`}>
+                          #{user.rank}
+                        </span>
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${
+                          isMe 
+                            ? 'bg-amber-400 text-slate-900' 
+                            : 'bg-white border text-primary border-slate-100'
+                        }`}>
+                          {user.avatarLetter}
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold leading-tight uppercase tracking-tight">{user.name}</h4>
+                          <p className={`text-[9px] ${
+                            isMe 
+                              ? 'text-slate-400 font-black' 
+                              : 'text-slate-400 font-bold'
+                          }`}>{user.role}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-xs font-bold leading-tight uppercase tracking-tight">{user.name}</h4>
-                        <p className={`text-[9px] ${
-                          isDemola 
-                            ? 'text-slate-400 font-black' 
-                            : 'text-slate-400 font-bold'
-                        }`}>{user.role}</p>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs font-black">{user.points} XP</span>
+                        {user.status === 'fire' && <span className="text-xs">🔥</span>}
+                        {user.status === 'streak' && <span className="text-xs">⚡</span>}
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono text-xs font-black">{user.points} XP</span>
-                      {user.status === 'fire' && <span className="text-xs">🔥</span>}
-                      {user.status === 'streak' && <span className="text-xs">⚡</span>}
                     </div>
-
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

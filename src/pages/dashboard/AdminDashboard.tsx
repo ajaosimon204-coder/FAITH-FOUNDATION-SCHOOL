@@ -3154,35 +3154,17 @@ function FinanceView() {
 
   const [invoices, setInvoices] = useState<any[]>(() => {
     const saved = localStorage.getItem('ff_all_student_invoices');
-    if (saved) return JSON.parse(saved);
-    const defaultInvoices = [
-      { id: 'INV-2026-001', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'FFP/2026/999', item: 'First Term Core School Fees (S3 Alpha)', amount: 180000, status: 'paid', dueDate: 'Sep 15, 2025', paidDate: 'Sep 10, 2025', txnRef: 'TXN-9844021-992' },
-      { id: 'INV-2026-002', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'FFP/2026/999', item: 'Uniforms & Institutional Sportswear Outfit', amount: 40000, status: 'paid', dueDate: 'Sep 15, 2025', paidDate: 'Sep 11, 2025', txnRef: 'TXN-9844029-411' },
-      { id: 'INV-2026-003', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'FFP/2026/999', item: 'SS3 Mock Syllabus Textbook Package Bundle', amount: 35000, status: 'paid', dueDate: 'Oct 01, 2025', paidDate: 'Sep 29, 2025', txnRef: 'TXN-9844118-090' },
-      { id: 'INV-2026-004', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'FFP/2026/999', item: 'Second Term Core School Fees (S3 Alpha)', amount: 180000, status: 'paid', dueDate: 'Jan 15, 2026', paidDate: 'Jan 12, 2026', txnRef: 'TXN-9851022-811' },
-      { id: 'INV-2026-005', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', studentId: 'FFP/2026/999', item: 'Third Term Academic School Fees (S3 Alpha)', amount: 180000, status: 'unpaid', dueDate: 'Jun 15, 2026' }
-    ];
-    localStorage.setItem('ff_all_student_invoices', JSON.stringify(defaultInvoices));
-    return defaultInvoices;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [students, setStudents] = useState<any[]>(() => {
     const saved = localStorage.getItem('ff_students');
-    return saved ? JSON.parse(saved) : [
-      { id: 'FFP/2026/999', name: 'Ajao Demola Simon', parentEmail: 'ajaosimon3@gmail.com' },
-      { id: 'FFP/2026/441', name: 'Ngozi Obi', parentEmail: 'n.obi@gmail.com' },
-      { id: 'FFP/2026/712', name: 'Babajide Cole', parentEmail: 'b.cole@gmail.com' }
-    ];
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [feeStructures, setFeeStructures] = useState(() => {
     const saved = localStorage.getItem('ff_fee_structures');
-    return saved ? JSON.parse(saved) : [
-      { classGroup: 'Nursery & Creche', tuition: '120,500', ancillary: '45,000' },
-      { classGroup: 'Lower Primary Grade', tuition: '145,000', ancillary: '52,000' },
-      { classGroup: 'Junior Secondary class', tuition: '185,000', ancillary: '65,000' },
-      { classGroup: 'Senior College class', tuition: '210,000', ancillary: '70,000' }
-    ];
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [activeFeeEditIdx, setActiveFeeEditIdx] = useState<number | null>(null);
@@ -3834,9 +3816,45 @@ interface AdmissionRequest {
   created_at?: string;
 }
 
+// ----------------------------------------------------------------------------
+// HEURISTIC AI ADMISSION SCORE ANALYSIS & RECRUITMENT REPORT ENGINE
+// ----------------------------------------------------------------------------
+export function getHeuristicAiRecommendation(adm: any) {
+  const score = adm.cbtScore !== undefined && adm.cbtScore !== null ? adm.cbtScore : 0;
+  const math = adm.cbtMathScore !== undefined && adm.cbtMathScore !== null ? adm.cbtMathScore : Math.round((score / 100) * 50);
+  const engl = adm.cbtEnglScore !== undefined && adm.cbtEnglScore !== null ? adm.cbtEnglScore : Math.round((score / 100) * 50);
+  const tabViolation = adm.tabSwitchesCount ?? 0;
+  const hasSuspension = adm.hasBeenSuspended === 'Yes' || adm.disciplinaryDetails;
+
+  let badge = "Recommended";
+  let color = "bg-blue-50 text-blue-700 border-blue-200";
+  let paragraph = "";
+
+  if (score >= 85) {
+    badge = "Highly Recommended";
+    color = "bg-emerald-50 text-emerald-700 border-emerald-250";
+    paragraph = `Applicant possesses stellar academic aptitude with a combined score of ${score}% (Math: ${math}/50, English: ${engl}/50). ${tabViolation > 0 ? `Please note ${tabViolation} window defocus violations during testing.` : "Demonstrated exceptional academic focus with clean security records."} Strongly recommend placement into the requested ${adm.target_class || 'JSS 1'} core track immediately.`;
+  } else if (score >= 50) {
+    badge = "Recommended";
+    color = "bg-sky-50 text-sky-700 border-sky-200";
+    paragraph = `Applicant demonstrates satisfactory credentials with a CBT aggregate of ${score}% (Math: ${math}/50, English: ${engl}/50). Meets the general school benchmark. Fits structural expectations. Recommended for placement in the ${adm.target_class || 'Basic Grade'} cohort.`;
+  } else if (score >= 40) {
+    badge = "Further Review Required";
+    color = "bg-amber-50 text-amber-700 border-amber-200";
+    paragraph = `Applicant scores marginally at ${score}% (Math: ${math}/50, English: ${engl}/50) with sub-threshold metrics. ${hasSuspension ? "Disciplinary background flags require administrative review." : ""} Interview panels recommend oral evaluation to assess general reading or arithmetic capabilities before making a final enrollment decision.`;
+  } else {
+    badge = "Not Recommended";
+    color = "bg-rose-50 text-rose-750 border-rose-220";
+    paragraph = `Applicant's current CBT baseline parameters (${score}%) are below critical thresholds of Faith Foundation. Math score: ${math}/50, English: ${engl}/50. Admissions department advises further diagnostic assessments or preparatory work before enrolling into the ${adm.target_class || 'SS Grade'} cohort.`;
+  }
+
+  return { badge, color, paragraph };
+}
+
 function AdmissionsView() {
   const [admissions, setAdmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeSubTab, setActiveSubTab] = useState<'registry' | 'leaderboard'>('registry');
   const [searchQuery, setSearchQuery] = useState('');
   const [classFilter, setClassFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -3899,60 +3917,18 @@ function AdmissionsView() {
       // Combine lists, filtering out duplicates by ID
       const combinedMap = new Map<string, any>();
 
-      // Seed combined list with default mock data if both are empty
-      if (dbList.length === 0 && formattedLocalList.length === 0) {
-        const mockRows: any[] = [
-          { 
-            id: 'ADM-2026-NUR-1002', 
-            student_name: 'David Adeleke Junior', 
-            parent_name: 'Dr. Adeleke Senior', 
-            email: 'david.adeleke@gmail.com',
-            phone: '08031234567',
-            target_class: 'Nursery 2',
-            address: '12 Adeleke Crescent, Ibadan',
-            previous_school: 'Pristine Spring Academy',
-            status: 'Submitted',
-            cbtScore: 80,
-            cbtTaken: true,
-            bloodGroup: 'O+',
-            genotype: 'AA',
-            feesPaid: false,
-            created_at: new Date().toISOString()
-          },
-          { 
-            id: 'ADM-2026-COL-3004', 
-            student_name: 'Favour Obi', 
-            parent_name: 'Chief Obi', 
-            email: 'obi.f@gmail.com',
-            phone: '09012345678',
-            target_class: 'JSS 1',
-            address: 'Foundation Estate Close, Ibadan',
-            previous_school: 'Lighthouse Christian Grade',
-            status: 'Examination Scheduled',
-            cbtTaken: false,
-            bloodGroup: 'A+',
-            genotype: 'AS',
-            examDate: 'June 18, 2026',
-            interviewDate: 'June 19, 2026',
-            feesPaid: false,
-            created_at: new Date().toISOString()
-          }
-        ];
-        mockRows.forEach(item => combinedMap.set(item.id, item));
-      } else {
-        // Add database items first
-        dbList.forEach(item => combinedMap.set(item.id, {
-          ...item,
-          student_name: item.student_name,
-          parent_name: item.parent_name,
-          target_class: item.target_class
-        }));
-        // Overwrite or append with local items (often more recent or locally mutated)
-        formattedLocalList.forEach(item => {
-          const existing = combinedMap.get(item.id) || {};
-          combinedMap.set(item.id, { ...existing, ...item });
-        });
-      }
+      // Add database items first
+      dbList.forEach(item => combinedMap.set(item.id, {
+        ...item,
+        student_name: item.student_name,
+        parent_name: item.parent_name,
+        target_class: item.target_class
+      }));
+      // Overwrite or append with local items (often more recent or locally mutated)
+      formattedLocalList.forEach(item => {
+        const existing = combinedMap.get(item.id) || {};
+        combinedMap.set(item.id, { ...existing, ...item });
+      });
 
       setAdmissions(Array.from(combinedMap.values()));
     } catch (err) {
@@ -4177,68 +4153,217 @@ function AdmissionsView() {
         </div>
       </div>
 
-      {/* Main List Column */}
-      <div className="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-sm">
-        <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider mb-6">Candidate Inquiry Flow Registries</h3>
-
-        <div className="grid gap-4">
-          {filteredAdmissions.map((adm) => (
-            <div 
-              key={adm.id}
-              onClick={() => {
-                setSelectedAdm(adm);
-                setTempExamDate(adm.examDate || 'June 18, 2026');
-                setTempInterviewDate(adm.interviewDate || 'June 19, 2026');
-                setTempAdminMessage(adm.adminMessage || '');
-              }}
-              className="p-5 bg-slate-50 hover:bg-slate-100/50 border border-slate-150 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all duration-200 cursor-pointer group"
-            >
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] bg-primary/10 text-primary font-black px-2.5 py-1 rounded-md uppercase">
-                    {adm.target_class || 'Grade Entry'}
-                  </span>
-                  <span className="text-[10px] font-mono text-slate-400 font-bold">Ref: {adm.id}</span>
-                </div>
-                
-                <h4 className="font-black text-slate-800 text-base mt-2 uppercase transition-all duration-200 group-hover:text-primary">
-                  {adm.student_name}
-                </h4>
-
-                <div className="space-y-1 mt-2 text-xs text-slate-500 font-semibold flex flex-wrap gap-x-4 gap-y-1">
-                  <span>Parent: <strong className="text-slate-700 font-bold">{adm.parent_name || 'N/A'}</strong></span>
-                  <span>Phone: <strong className="text-slate-705">{adm.phone}</strong></span>
-                  {adm.cbtScore !== undefined && adm.cbtScore !== null && (
-                    <span className="text-indigo-600">CBT Score: <strong className="font-extrabold">{adm.cbtScore}%</strong></span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex gap-3 items-center shrink-0">
-                <span className={`text-[10px] uppercase font-black px-3 py-1.5 rounded-full border ${
-                  adm.status === 'Submitted' || adm.status === 'pending' ? 'bg-yellow-50 text-amber-600 border-yellow-250' :
-                  adm.status === 'Awaiting Documents' ? 'bg-orange-50 text-orange-600 border-orange-200' :
-                  adm.status === 'Examination Scheduled' ? 'bg-indigo-50 text-indigo-600 border-indigo-250' :
-                  adm.status === 'Approved' || adm.status === 'Admitted' || adm.status === 'accepted' ? 'bg-emerald-50 text-emerald-600 border-emerald-250' :
-                  'bg-rose-50 text-rose-600 border-rose-200'
-                }`}>
-                  {adm.status}
-                </span>
-
-                <button className="p-2 bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-xl border border-slate-200 duration-200 shadow-sm transition-all">
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
-
-          {filteredAdmissions.length === 0 && (
-            <div className="text-center py-16 text-slate-400 bg-slate-50 border border-dashed rounded-3xl">
-              <p className="font-bold text-sm">No registries matching selected scopes.</p>
-            </div>
-          )}
-        </div>
+      {/* Tab Selectors for Admissions Workstation */}
+      <div className="flex gap-4 border-b border-slate-100 pb-1 mt-6">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('registry')}
+          className={`pb-3 px-4 text-xs font-black uppercase tracking-wider border-b-2 text-left duration-150 cursor-pointer ${activeSubTab === 'registry' ? 'border-primary text-primary font-black' : 'border-transparent text-slate-400 hover:text-slate-650'}`}
+        >
+          📁 dossiers registry list ({filteredAdmissions.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('leaderboard')}
+          className={`pb-3 px-4 text-xs font-black uppercase tracking-wider border-b-2 text-left duration-150 cursor-pointer ${activeSubTab === 'leaderboard' ? 'border-primary text-primary font-black' : 'border-transparent text-slate-400 hover:text-slate-650'}`}
+        >
+          🏆 CBT Leaderboard & AI Recommendation reports
+        </button>
       </div>
+
+      {activeSubTab === 'registry' ? (
+        <div className="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-sm">
+          <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider mb-6">Candidate Inquiry Flow Registries</h3>
+
+          <div className="grid gap-4">
+            {filteredAdmissions.map((adm) => (
+              <div 
+                key={adm.id}
+                onClick={() => {
+                  setSelectedAdm(adm);
+                  setTempExamDate(adm.examDate || 'June 18, 2026');
+                  setTempInterviewDate(adm.interviewDate || 'June 19, 2026');
+                  setTempAdminMessage(adm.adminMessage || '');
+                }}
+                className="p-5 bg-slate-50 hover:bg-slate-100/50 border border-slate-150 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all duration-200 cursor-pointer group animate-in slide-in-from-bottom-2"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] bg-primary/10 text-primary font-black px-2.5 py-1 rounded-md uppercase">
+                      {adm.target_class || 'Grade Entry'}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400 font-bold">Ref: {adm.id}</span>
+                  </div>
+                  
+                  <h4 className="font-black text-slate-800 text-base mt-2 uppercase transition-all duration-200 group-hover:text-primary">
+                    {adm.student_name}
+                  </h4>
+
+                  <div className="space-y-1 mt-2 text-xs text-slate-500 font-semibold flex flex-wrap gap-x-4 gap-y-1">
+                    <span>Parent: <strong className="text-slate-700 font-bold">{adm.parent_name || 'N/A'}</strong></span>
+                    <span>Phone: <strong className="text-slate-705">{adm.phone}</strong></span>
+                    {adm.cbtScore !== undefined && adm.cbtScore !== null && (
+                      <span className="text-indigo-600">CBT Score: <strong className="font-extrabold">{adm.cbtScore}%</strong></span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 items-center shrink-0">
+                  <span className={`text-[10px] uppercase font-black px-3 py-1.5 rounded-full border ${
+                    adm.status === 'Submitted' || adm.status === 'pending' ? 'bg-yellow-50 text-amber-600 border-yellow-250' :
+                    adm.status === 'Awaiting Documents' ? 'bg-orange-50 text-orange-600 border-orange-200' :
+                    adm.status === 'Examination Scheduled' ? 'bg-indigo-50 text-indigo-600 border-indigo-250' :
+                    adm.status === 'Approved' || adm.status === 'Admitted' || adm.status === 'accepted' ? 'bg-emerald-50 text-emerald-600 border-emerald-250' :
+                    'bg-rose-50 text-rose-600 border-rose-200'
+                  }`}>
+                    {adm.status}
+                  </span>
+
+                  <button className="p-2 bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-xl border border-slate-200 duration-200 shadow-sm transition-all">
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {filteredAdmissions.length === 0 && (
+              <div className="text-center py-16 text-slate-400 bg-slate-50 border border-dashed rounded-3xl">
+                <p className="font-bold text-sm">No registries matching selected scopes.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-sm overflow-x-auto animate-in fade-in duration-200">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="font-extrabold text-slate-800 text-sm uppercase tracking-wider">Entrance Exam Performance Ranking</h3>
+              <p className="text-[10px] text-slate-400 mt-1 font-semibold">Real-time descending CBT grade reporting matched to school requirements (Passing Score = 50 Marks Max per subject)</p>
+            </div>
+          </div>
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-slate-150 text-slate-450 font-black uppercase text-[9px] tracking-wider bg-slate-50">
+                <th className="py-3.5 px-4">Rank</th>
+                <th className="py-3.5 px-4">Candidate Name</th>
+                <th className="py-3.5 px-4">Ref Number</th>
+                <th className="py-3.5 px-4">Class Level</th>
+                <th className="py-3.5 px-4 text-center">Mathematics (/50)</th>
+                <th className="py-3.5 px-4 text-center">English (/50)</th>
+                <th className="py-3.5 px-3 text-center">Overall (%)</th>
+                <th className="py-3.5 px-3 text-center">Defocus Violations</th>
+                <th className="py-3.5 px-4">Passing Status</th>
+                <th className="py-3.5 px-4">AI Rec Audit</th>
+                <th className="py-3.5 px-4 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                const candidatesWithScores = admissions
+                  .map(adm => {
+                    const math = adm.cbtMathScore !== undefined ? adm.cbtMathScore : (adm.cbtScore !== undefined ? Math.round((adm.cbtScore / 2)) : 0);
+                    const engl = adm.cbtEnglScore !== undefined ? adm.cbtEnglScore : (adm.cbtScore !== undefined ? Math.round((adm.cbtScore / 2)) : 0);
+                    const total = adm.cbtScore !== undefined ? adm.cbtScore : (math + engl);
+                    return {
+                      ...adm,
+                      computedMath: math,
+                      computedEngl: engl,
+                      computedTotal: total
+                    };
+                  })
+                  .sort((a, b) => b.computedTotal - a.computedTotal);
+
+                return candidatesWithScores.map((adm, index) => {
+                  const rec = getHeuristicAiRecommendation(adm);
+                  const hasScore = adm.cbtScore !== undefined && adm.cbtScore !== null;
+                  
+                  return (
+                    <tr 
+                      key={adm.id} 
+                      className="border-b border-slate-100 hover:bg-slate-50/75 duration-100 cursor-pointer"
+                      onClick={() => {
+                        setSelectedAdm(adm);
+                        setTempExamDate(adm.examDate || 'June 18, 2026');
+                        setTempInterviewDate(adm.interviewDate || 'June 19, 2026');
+                        setTempAdminMessage(adm.adminMessage || '');
+                      }}
+                    >
+                      <td className="py-4 px-4 font-black">
+                        {hasScore ? (
+                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg text-[10px] font-mono font-black ${
+                            index === 0 ? 'bg-[#fef08a] text-[#854d0e] border border-[#fde047]' :
+                            index === 1 ? 'bg-slate-200 text-slate-700 border border-slate-300' :
+                            index === 2 ? 'bg-orange-100 text-orange-850 border border-orange-200' :
+                            'bg-slate-100 text-slate-500'
+                          }`}>
+                            #{index + 1}
+                          </span>
+                        ) : (
+                          <span className="text-slate-350 italic font-medium">#?</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4 font-bold text-[#111827] uppercase">{adm.student_name}</td>
+                      <td className="py-4 px-4 font-mono text-slate-400 text-[10px] font-bold">{adm.id}</td>
+                      <td className="py-4 px-4">
+                        <span className="text-[10px] bg-sky-50 text-sky-850 border border-sky-100 px-2.5 py-0.5 rounded font-black uppercase">
+                          {adm.target_class || 'JSS 1'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4 text-center font-black text-slate-800">
+                        {hasScore ? `${adm.computedMath}/50` : <span className="text-slate-300 italic">Pending</span>}
+                      </td>
+                      <td className="py-4 px-4 text-center font-black text-slate-800">
+                        {hasScore ? `${adm.computedEngl}/50` : <span className="text-slate-300 italic">Pending</span>}
+                      </td>
+                      <td className="py-4 px-3 text-center">
+                        {hasScore ? (
+                          <span className="font-extrabold text-primary bg-primary/5 px-2 py-0.5 rounded text-xs select-none">
+                            {adm.computedTotal}%
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 italic font-medium">None</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-3 text-center">
+                        {hasScore ? (
+                          <span className={`font-mono font-black text-xs ${adm.tabSwitchesCount > 0 ? 'text-red-500 font-extrabold bg-red-50 px-1.5 py-0.5 rounded border border-red-100' : 'text-slate-400'}`}>
+                            {adm.tabSwitchesCount ?? 0}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4">
+                        {hasScore ? (
+                          <span className={`text-[9px] uppercase font-black px-2.5 py-1 rounded-full border ${adm.computedTotal >= 50 ? 'bg-emerald-50 text-emerald-600 border-emerald-150' : 'bg-red-50 text-red-550 border-red-150'}`}>
+                            {adm.computedTotal >= 50 ? 'Passed' : 'Fail'}
+                          </span>
+                        ) : (
+                          <span className="text-slate-450 font-bold uppercase text-[9px] px-2.5 py-1 bg-slate-50 border border-slate-150 rounded-full">unexamined</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4">
+                        {hasScore ? (
+                          <span className={`text-[9px] uppercase font-black px-2 py-1 rounded-lg border ${rec.color}`}>
+                            {rec.badge}
+                          </span>
+                        ) : (
+                          <span className="text-slate-350 font-medium italic">-</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4 text-right">
+                        <button className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg text-[10px] font-black uppercase tracking-wider duration-150 shadow-sm mb-0.5">
+                          Audit Dossier
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                });
+              })()}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* DETAIL MODAL OVERVIEW */}
       {selectedAdm && (
@@ -4293,18 +4418,57 @@ function AdmissionsView() {
                   </div>
                 </div>
 
-                {/* 3. CBT Baseline Results */}
-                <div className="space-y-3 p-4 bg-slate-50 border rounded-2xl">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">3. CBT Assessment Score Tally</h4>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-slate-700">Online CBT Score Tally Logged:</p>
-                      <p className="text-[10px] text-slate-400 font-semibold">Immediate quantitative verbal results summary</p>
+                {/* 3. CBT Baseline Results & AI Audit Recommendations */}
+                <div className="space-y-4 p-4 bg-slate-50 border rounded-2xl">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">3. Entrance CBT Report Card</h4>
+                  
+                  {selectedAdm.cbtScore !== undefined ? (() => {
+                    const rec = getHeuristicAiRecommendation(selectedAdm);
+                    const math = selectedAdm.cbtMathScore !== undefined ? selectedAdm.cbtMathScore : Math.round((selectedAdm.cbtScore / 100) * 50);
+                    const engl = selectedAdm.cbtEnglScore !== undefined ? selectedAdm.cbtEnglScore : Math.round((selectedAdm.cbtScore / 100) * 50);
+                    
+                    return (
+                      <div className="space-y-3.5">
+                        <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-bold animate-in fade-in duration-200">
+                          <div className="bg-white p-2 border rounded-xl">
+                            <span className="text-slate-400 block text-[8px] uppercase">Mathematics</span>
+                            <span className="font-black text-slate-800 text-xs">{math}/50</span>
+                          </div>
+                          <div className="bg-white p-2 border rounded-xl">
+                            <span className="text-slate-400 block text-[8px] uppercase">English</span>
+                            <span className="font-black text-slate-800 text-xs">{engl}/50</span>
+                          </div>
+                          <div className="bg-white p-2 border rounded-xl">
+                            <span className="text-slate-400 block text-[8px] uppercase">Total</span>
+                            <span className="font-black text-amber-600 text-xs">{selectedAdm.cbtScore}%</span>
+                          </div>
+                        </div>
+
+                        {/* Defocus / Cheating warns */}
+                        <div className="flex items-center justify-between text-[10px] px-2.5 py-1.5 bg-white border border-slate-100 rounded-xl">
+                          <span className="text-slate-500 font-bold uppercase">Tab Defocus Warnings:</span>
+                          <span className={`font-mono font-black ${selectedAdm.tabSwitchesCount > 0 ? 'text-rose-500' : 'text-slate-400'}`}>
+                            {selectedAdm.tabSwitchesCount ?? 0} infraction(s)
+                          </span>
+                        </div>
+
+                        {/* AI recommendations badge and summary */}
+                        <div className="p-3 bg-white border border-slate-150 rounded-xl space-y-2 text-left">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[8px] font-black tracking-widest text-slate-400 uppercase">AI AUDITOR INSIGHT</span>
+                            <span className={`text-[8px] uppercase font-black px-2 py-0.5 rounded border ${rec.color}`}>
+                              {rec.badge}
+                            </span>
+                          </div>
+                          <p className="text-[10px] leading-relaxed text-slate-500 font-medium">{rec.paragraph}</p>
+                        </div>
+                      </div>
+                    );
+                  })() : (
+                    <div className="text-center py-4 text-slate-400 font-bold text-[10px] uppercase">
+                      Candidate has not taken the online Entrance CBT yet.
                     </div>
-                    <span className="text-2xl font-black bg-primary/10 text-primary px-3 py-1 rounded-xl">
-                      {selectedAdm.cbtScore !== undefined ? `${selectedAdm.cbtScore}%` : '80%'}
-                    </span>
-                  </div>
+                  )}
                 </div>
 
                 {/* 4. Signed signature preview */}

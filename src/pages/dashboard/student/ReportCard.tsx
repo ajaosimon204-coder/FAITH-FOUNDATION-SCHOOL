@@ -28,126 +28,49 @@ export default function ReportCard() {
   const [reportData, setReportData] = useState<any>(null);
 
   useEffect(() => {
-    const defaultData = {
-      '1st': {
-        class: 'Senior Secondary School (SS3) - Science Alpha',
-        academicYear: '2025/2026',
-        gpa: 4.2,
-        standing: '1st in Class of 28',
-        subjects: [
-          { subject: 'Mathematics', ca1: 14, ca2: 13, exam: 67, remarks: 'Excellent capability, exceptional critical thinker' },
-          { subject: 'Further Mathematics', ca1: 15, ca2: 14, exam: 65, remarks: 'Outstanding performance in calculus and vector analysis' },
-          { subject: 'Physics', ca1: 12, ca2: 13, exam: 58, remarks: 'Enthusiastic participant, very strong analytical mind' },
-          { subject: 'Chemistry', ca1: 13, ca2: 11, exam: 60, remarks: 'Stellar lab research work and neat journal presentation' },
-          { subject: 'Biology', ca1: 11, ca2: 12, exam: 55, remarks: 'Good output, shows high interest in biotechnology' },
-          { subject: 'English Language', ca1: 13, ca2: 12, exam: 52, remarks: 'Excellent expression, strong in vocabulary and essays' },
-          { subject: 'Agricultural Science', ca1: 14, ca2: 14, exam: 61, remarks: 'Very good in practical crop breeding experiments' },
-          { subject: 'Civic Education', ca1: 13, ca2: 13, exam: 59, remarks: 'Great comprehension of moral principles and civic roles' }
-        ] as SubjectGrade[],
-        teacherRemarks: 'Demola is a brilliant, disciplined, and spiritual student. He has demonstrated consistent academic excellence and leadership skills. He is highly recommended for university early-admissions.',
-        principalRemarks: 'A superb performance. Demola remains a shining star of Faith Foundation Schools. With this consistency, he is destined for greatness.',
-        signatureDate: '2025-12-18',
-        attendance: '98% (112 days out of 114)',
-        cognitive: {
-          knowledge: 95,
-          comprehension: 90,
-          application: 92,
-          analysis: 88,
-          synthesis: 85
-        },
-        affective: {
-          punctuality: 5, // Rating scale: 1 to 5
-          neatness: 5,
-          regularity: 5,
-          honesty: 5,
-          reliability: 4,
-          politeness: 5
-        }
-      },
-      '2nd': {
-        class: 'Senior Secondary School (SS3) - Science Alpha',
-        academicYear: '2025/2026',
-        gpa: 4.4,
-        standing: '1st in Class of 28',
-        subjects: [
-          { subject: 'Mathematics', ca1: 15, ca2: 14, exam: 68, remarks: 'Perfect understanding displayed consistently' },
-          { subject: 'Further Mathematics', ca1: 14, ca2: 14, exam: 66, remarks: 'Very sharp mathematical instincts' },
-          { subject: 'Physics', ca1: 13, ca2: 12, exam: 62, remarks: 'High proficiency in complex kinetics' },
-          { subject: 'Chemistry', ca1: 14, ca2: 12, exam: 63, remarks: 'Outstanding performance in chemistry experiments' },
-          { subject: 'Biology', ca1: 12, ca2: 13, exam: 59, remarks: 'Demonstrates deep biological classification knowledge' },
-          { subject: 'English Language', ca1: 14, ca2: 13, exam: 55, remarks: 'Remarkable improvement in public speaking & debates' },
-          { subject: 'Agricultural Science', ca1: 13, ca2: 13, exam: 60, remarks: 'Displays solid understanding of husbandry' },
-          { subject: 'Civic Education', ca1: 14, ca2: 14, exam: 62, remarks: 'Impressive civic analysis skills' }
-        ] as SubjectGrade[],
-        teacherRemarks: 'Demola continues to push academic boundaries. His dedication to learning is highly commendable, and he has also been a supportive peer tutor.',
-        principalRemarks: 'A truly outstanding academic return. Fully approved. Well done, Demola!',
-        signatureDate: '2026-04-03',
-        attendance: '99% (104/105 days)',
-        cognitive: {
-          knowledge: 98,
-          comprehension: 94,
-          application: 95,
-          analysis: 92,
-          synthesis: 89
-        },
-        affective: {
-          punctuality: 5,
-          neatness: 5,
-          regularity: 5,
-          honesty: 5,
-          reliability: 5,
-          politeness: 5
-        }
-      },
-      '3rd': {
-        class: 'Senior Secondary School (SS3) - Science Alpha',
-        academicYear: '2025/2026',
-        gpa: 4.6,
-        standing: '1st in Class of 28 (Valedictorian Nominee)',
-        subjects: [
-          { subject: 'Mathematics', ca1: 15, ca2: 15, exam: 69, remarks: 'Exceptional, unmatched mathematical brilliance' },
-          { subject: 'Further Mathematics', ca1: 15, ca2: 15, exam: 68, remarks: 'Brilliant mastery of integration and mechanics' },
-          { subject: 'Physics', ca1: 14, ca2: 14, exam: 65, remarks: 'Superb abstract reasoning in electromagnetism' },
-          { subject: 'Chemistry', x: 1, ca1: 14, ca2: 13, exam: 64, remarks: 'Incredible speed and accuracy in stoichiometry' },
-          { subject: 'Biology', ca1: 13, ca2: 13, exam: 62, remarks: 'Stellar comprehension of human systems' },
-          { subject: 'English Language', ca1: 15, ca2: 14, exam: 60, remarks: 'Fantastic vocabulary and eloquent arguments' },
-          { subject: 'Agricultural Science', ca1: 14, ca2: 15, exam: 65, remarks: 'Stellar agro-technology presentation' },
-          { subject: 'Civic Education', ca1: 15, ca2: 14, exam: 65, remarks: 'Exemplary respect for ethics and state duties' }
-        ] as SubjectGrade[],
-        teacherRemarks: 'A natural valedictorian. Demola is not only academically distinguished but exhibits unparalleled spiritual and moral strength. Truly a model student.',
-        principalRemarks: 'The apex of academic excellence. We are honored to send this brilliant student into the higher instututions. Brilliant job!',
-        signatureDate: '2026-07-15',
-        attendance: '100% (110/110 days)',
-        cognitive: {
-          knowledge: 99,
-          comprehension: 97,
-          application: 98,
-          analysis: 96,
-          synthesis: 94
-        },
-        affective: {
-          punctuality: 5,
-          neatness: 5,
-          regularity: 5,
-          honesty: 5,
-          reliability: 5,
-          politeness: 5
-        }
+    const studentId = profile?.studentId || profile?.id;
+    if (!studentId) return;
+
+    // Check if there is a report card map in localStorage
+    const savedMapStr = localStorage.getItem('ff_student_report_cards_map');
+    let studentCard = null;
+    if (savedMapStr) {
+      try {
+        const map = JSON.parse(savedMapStr);
+        studentCard = map[studentId];
+      } catch (e) {
+        console.error('Failed to parse report cards map:', e);
       }
-    };
-
-    // Fix possible chemistry extra property 'x'
-    (defaultData['3rd'].subjects[3] as any).ca1 = 14; 
-    delete (defaultData['3rd'].subjects[3] as any).x;
-
-    const saved = localStorage.getItem('ff_student_report_card');
-    if (saved) {
-      setReportData(JSON.parse(saved));
-    } else {
-      localStorage.setItem('ff_student_report_card', JSON.stringify(defaultData));
-      setReportData(defaultData);
     }
-  }, []);
+
+    if (studentCard) {
+      setReportData(studentCard);
+    } else {
+      // This is a new student who hasn't done any termly exam yet
+      setReportData({ noExamData: true });
+    }
+  }, [profile]);
+
+  if (reportData?.noExamData) {
+    return (
+      <div className="max-w-xl mx-auto my-12 p-8 bg-slate-50 border border-slate-200 rounded-[32px] text-center space-y-4 shadow-xl shadow-slate-500/5 animate-in fade-in duration-300 animate-out fill-mode-both">
+        <motion.div 
+          initial={{ rotate: -10, scale: 0.9 }}
+          animate={{ rotate: 0, scale: 1 }}
+          className="mx-auto w-16 h-16 bg-slate-150 text-slate-500 rounded-2xl flex items-center justify-center shadow-inner"
+        >
+          <FileText size={28} />
+        </motion.div>
+        <h3 className="text-xl font-bold font-display text-slate-800 uppercase tracking-tight">No results available.</h3>
+        <p className="text-xs text-slate-500 leading-relaxed font-semibold max-w-sm mx-auto">
+          No certified termly examination reports are saved in your docket yet. This is normal for newly registered students who have not completed graded assessments or terminal exams.
+        </p>
+        <div className="p-3.5 bg-white border border-slate-150 rounded-2xl max-w-xs mx-auto text-[10px] text-slate-430 font-mono tracking-wider">
+          Query: REPORT-NOT-SAVED // Status: Enrolled Student
+        </div>
+      </div>
+    );
+  }
 
   if (profile?.role === 'student' && profile?.reportCardPublished === false) {
     return (
@@ -159,7 +82,7 @@ export default function ReportCard() {
         >
           <Lock size={28} />
         </motion.div>
-        <h3 className="text-xl font-bold font-display text-slate-800">Academic Scorecard Reserved</h3>
+        <h3 className="text-xl font-bold font-display text-slate-800">Results have not yet been published.</h3>
         <p className="text-xs text-slate-550 leading-relaxed font-semibold max-w-sm mx-auto">
           Your continuous assessment progress reports and term results are currently undergoing terminal security checks. Results are made visible once signed by the Registrar.
         </p>
@@ -179,6 +102,27 @@ export default function ReportCard() {
   }
 
   const currentReport = reportData[term];
+
+  if (!currentReport) {
+    return (
+      <div className="max-w-xl mx-auto my-12 p-8 bg-slate-50 border border-slate-200 rounded-[32px] text-center space-y-4 shadow-xl shadow-slate-500/5 animate-in fade-in duration-300">
+        <motion.div 
+          initial={{ rotate: -10, scale: 0.9 }}
+          animate={{ rotate: 0, scale: 1 }}
+          className="mx-auto w-16 h-16 bg-slate-150 text-slate-500 rounded-2xl flex items-center justify-center shadow-inner"
+        >
+          <FileText size={28} />
+        </motion.div>
+        <h3 className="text-xl font-bold font-display text-slate-800 uppercase tracking-tight">No results available.</h3>
+        <p className="text-xs text-slate-500 leading-relaxed font-semibold max-w-sm mx-auto">
+          No certified termly examination reports are published in your docket for the selected term yet.
+        </p>
+        <div className="p-3.5 bg-white border border-slate-150 rounded-2xl max-w-xs mx-auto text-[10px] text-slate-400 font-mono tracking-wider">
+          Query: term-{term}-NOT-FOUND // Status: Enrolled Student
+        </div>
+      </div>
+    );
+  }
 
   const getGrade = (total: number) => {
     if (total >= 85) return { grade: 'A1', desc: 'Excellent' };
@@ -253,21 +197,27 @@ export default function ReportCard() {
 
         {/* Bio Data Details */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-8 border-b border-slate-100 text-xs">
-          <div className="space-y-1">
+          <div className="space-y-1 font-sans">
             <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Student Name</span>
-            <p className="font-extrabold text-slate-800 uppercase">Ajao Demola Simon</p>
+            <p className="font-extrabold text-slate-800 uppercase">
+              {profile?.full_name || profile?.name || profile?.student_name || 'Student'}
+            </p>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 font-sans">
             <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Admission No.</span>
-            <p className="font-extrabold text-slate-800 uppercase">FF-2023-SS3-059</p>
+            <p className="font-extrabold text-slate-800 uppercase">
+              {profile?.studentId || profile?.id || 'N/A'}
+            </p>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 font-sans">
             <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Current Class</span>
-            <p className="font-extrabold text-slate-800 uppercase truncate" title={currentReport.class}>{currentReport.class.split(' - ')[0]}</p>
+            <p className="font-extrabold text-slate-800 uppercase truncate" title={currentReport.class}>
+              {String(currentReport.class || profile?.studentClass || profile?.class || 'SS3').split(' - ')[0]}
+            </p>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 font-sans">
             <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Academic Term</span>
-            <p className="font-extrabold text-primary uppercase font-mono">{term} Term ({currentReport.academicYear})</p>
+            <p className="font-extrabold text-primary uppercase font-mono">{term} Term ({currentReport.academicYear || '2025/2026'})</p>
           </div>
         </div>
 

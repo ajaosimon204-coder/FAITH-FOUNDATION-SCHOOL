@@ -33,7 +33,7 @@ export default function PaymentsPortal() {
   const [selectedReceipt, setSelectedReceipt] = useState<Invoice | null>(null);
   
   // Custom Payment Form Fields
-  const [cardHolder, setCardHolder] = useState('Ajao Demola Simon');
+  const [cardHolder, setCardHolder] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
@@ -42,43 +42,22 @@ export default function PaymentsPortal() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    const studentEmail = profile?.email || 'ajaosimon3@gmail.com';
-    const studentName = profile?.full_name || 'Ajao Demola Simon';
+    if (!profile) return;
+    const studentEmail = profile?.email || '';
+    const studentName = profile?.full_name || profile?.name || profile?.student_name || '';
     
+    setCardHolder(studentName);
+
     const saved = localStorage.getItem('ff_all_student_invoices');
     if (saved) {
       const allInvoices: Invoice[] = JSON.parse(saved);
       // Filter for current student's bills
       const currentStudentInvoices = allInvoices.filter(inv => 
-        (inv as any).studentEmail?.toLowerCase() === studentEmail.toLowerCase() ||
-        (!inv.hasOwnProperty('studentEmail') && studentEmail === 'ajaosimon3@gmail.com') // Fallback matching of pre-existing defaults
+        (inv as any).studentEmail?.toLowerCase() === studentEmail.toLowerCase()
       );
-      
-      if (currentStudentInvoices.length > 0) {
-        setInvoices(currentStudentInvoices);
-      } else {
-        // Create student-specific bills in the centralized table
-        const defaultStudentInvoices: Invoice[] = [
-          { id: 'INV-2026-001', studentEmail, studentName, item: 'First Term Core School Fees (S3 Alpha)', amount: 180000, status: 'paid', dueDate: 'Sep 15, 2025', paidDate: 'Sep 10, 2025', txnRef: 'TXN-9844021-992' },
-          { id: 'INV-2026-002', studentEmail, studentName, item: 'Uniforms & Institutional Sportswear Outfit', amount: 40000, status: 'paid', dueDate: 'Sep 15, 2025', paidDate: 'Sep 11, 2025', txnRef: 'TXN-9844029-411' },
-          { id: 'INV-2026-003', studentEmail, studentName, item: 'SS3 Mock Syllabus Textbook Package Bundle', amount: 35000, status: 'paid', dueDate: 'Oct 01, 2025', paidDate: 'Sep 29, 2025', txnRef: 'TXN-9844118-090' },
-          { id: 'INV-2026-004', studentEmail, studentName, item: 'Second Term Core School Fees (S3 Alpha)', amount: 180000, status: 'paid', dueDate: 'Jan 15, 2026', paidDate: 'Jan 12, 2026', txnRef: 'TXN-9851022-811' },
-          { id: 'INV-2026-005', studentEmail, studentName, item: 'Third Term Academic School Fees (S3 Alpha)', amount: 180000, status: 'unpaid', dueDate: 'Jun 15, 2026' }
-        ];
-        const combined = [...allInvoices, ...defaultStudentInvoices];
-        localStorage.setItem('ff_all_student_invoices', JSON.stringify(combined));
-        setInvoices(defaultStudentInvoices);
-      }
+      setInvoices(currentStudentInvoices);
     } else {
-      const defaultInvoices: Invoice[] = [
-        { id: 'INV-2026-001', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', item: 'First Term Core School Fees (S3 Alpha)', amount: 180000, status: 'paid', dueDate: 'Sep 15, 2025', paidDate: 'Sep 10, 2025', txnRef: 'TXN-9844021-992' },
-        { id: 'INV-2026-002', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', item: 'Uniforms & Institutional Sportswear Outfit', amount: 40000, status: 'paid', dueDate: 'Sep 15, 2025', paidDate: 'Sep 11, 2025', txnRef: 'TXN-9844029-411' },
-        { id: 'INV-2026-003', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', item: 'SS3 Mock Syllabus Textbook Package Bundle', amount: 35000, status: 'paid', dueDate: 'Oct 01, 2025', paidDate: 'Sep 29, 2025', txnRef: 'TXN-9844118-090' },
-        { id: 'INV-2026-004', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', item: 'Second Term Core School Fees (S3 Alpha)', amount: 180000, status: 'paid', dueDate: 'Jan 15, 2026', paidDate: 'Jan 12, 2026', txnRef: 'TXN-9851022-811' },
-        { id: 'INV-2026-005', studentEmail: 'ajaosimon3@gmail.com', studentName: 'Ajao Demola Simon', item: 'Third Term Academic School Fees (S3 Alpha)', amount: 180000, status: 'unpaid', dueDate: 'Jun 15, 2026' }
-      ];
-      setInvoices(defaultInvoices);
-      localStorage.setItem('ff_all_student_invoices', JSON.stringify(defaultInvoices));
+      setInvoices([]);
     }
   }, [profile]);
 
@@ -223,7 +202,7 @@ export default function PaymentsPortal() {
             <p className="text-3xl font-black font-display text-slate-850">₦{totalPaid.toLocaleString()}</p>
           </div>
           <div className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">
-            All Term 1 & Term 2 bills settled safely
+            {invoices.filter(inv => inv.status === 'paid').length} bill invoices settled safely
           </div>
         </div>
 
@@ -238,7 +217,7 @@ export default function PaymentsPortal() {
             <p className="text-3xl font-black font-display text-rose-650">₦{totalUnpaid.toLocaleString()}</p>
           </div>
           <div className="text-[10px] text-slate-450 italic font-medium leading-tight">
-            Please pay Third Term school bills before end of examinations.
+            Please settle outstanding tuition prior to terminal assessments.
           </div>
         </div>
 
@@ -248,58 +227,73 @@ export default function PaymentsPortal() {
       <div className="bg-white border border-slate-200 rounded-[32px] p-6 md:p-8 space-y-6 shadow-sm">
         <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-105 pb-3">Itemized Billing Statement & Fees Ledger</h3>
 
-        <div className="border border-slate-150 rounded-2xl overflow-hidden shadow-sm">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 text-[10px] font-black uppercase tracking-wider">
-                <th className="py-4 px-5">Invoice reference</th>
-                <th className="py-4 px-4 font-black">Fee Purpose Description</th>
-                <th className="py-4 px-4 text-center">Amount (₦)</th>
-                <th className="py-4 px-4 text-center">Due Date</th>
-                <th className="py-4 px-4 text-center">Payment Status</th>
-                <th className="py-4 px-5 text-right">Accounting Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {invoices.map((inv) => (
-                <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="py-4 px-5 font-mono text-slate-500 font-bold">{inv.id}</td>
-                  <td className="py-4 px-4 font-extrabold text-slate-800 uppercase">{inv.item}</td>
-                  <td className="py-4 px-4 text-center font-mono font-black text-slate-700">₦{inv.amount.toLocaleString()}</td>
-                  <td className="py-4 px-4 text-center font-semibold text-slate-500">{inv.dueDate}</td>
-                  <td className="py-4 px-4 text-center">
-                    {inv.status === 'paid' ? (
-                      <span className="bg-green-50 text-green-700 border border-green-150 text-[10px] font-black px-2.5 py-1 rounded-xl uppercase">
-                        PAID & SETTLED
-                      </span>
-                    ) : (
-                      <span className="bg-rose-50 text-rose-700 border border-rose-150 text-[10px] font-black px-2.5 py-1 rounded-xl uppercase animate-pulse">
-                        PENDING PAYMENT
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-4 px-5 text-right">
-                    {inv.status === 'paid' ? (
-                      <button 
-                        onClick={() => viewReceipt(inv)}
-                        className="bg-slate-50 border border-slate-250 text-slate-600 hover:bg-slate-100 hover:text-slate-800 px-3.5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ml-auto cursor-pointer"
-                      >
-                        <Receipt size={12} /> Receipt
-                      </button>
-                    ) : (
-                      <button 
-                        onClick={() => startPaymentFlow(inv)}
-                        className="bg-primary text-white hover:bg-opacity-95 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5 ml-auto cursor-pointer shadow-sm shadow-primary/20"
-                      >
-                        <CreditCard size={12} /> Pay Now
-                      </button>
-                    )}
-                  </td>
+        {invoices.length === 0 ? (
+          <div className="text-center py-12 space-y-4 max-w-sm mx-auto">
+            <div className="w-16 h-16 bg-slate-50 border border-slate-150 rounded-2xl flex items-center justify-center mx-auto text-slate-400">
+              <Receipt size={28} />
+            </div>
+            <h3 className="text-base font-bold text-slate-800 uppercase tracking-tight">No payment records found.</h3>
+            <p className="text-xs text-slate-500 leading-relaxed font-semibold">
+              There are currently no active invoice records or transaction charges issued to your account.
+            </p>
+            <div className="p-2.5 bg-slate-50 border border-slate-150 rounded-xl max-w-xs mx-auto text-[10px] text-slate-400 font-mono tracking-wider">
+              Query: NO-PAYMENT-RECORD // Status: Settled
+            </div>
+          </div>
+        ) : (
+          <div className="border border-slate-150 rounded-2xl overflow-hidden shadow-sm">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 text-[10px] font-black uppercase tracking-wider">
+                  <th className="py-4 px-5">Invoice reference</th>
+                  <th className="py-4 px-4 font-black">Fee Purpose Description</th>
+                  <th className="py-4 px-4 text-center">Amount (₦)</th>
+                  <th className="py-4 px-4 text-center">Due Date</th>
+                  <th className="py-4 px-4 text-center">Payment Status</th>
+                  <th className="py-4 px-5 text-right">Accounting Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {invoices.map((inv) => (
+                  <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-4 px-5 font-mono text-slate-500 font-bold">{inv.id}</td>
+                    <td className="py-4 px-4 font-extrabold text-slate-800 uppercase">{inv.item}</td>
+                    <td className="py-4 px-4 text-center font-mono font-black text-slate-700">₦{inv.amount.toLocaleString()}</td>
+                    <td className="py-4 px-4 text-center font-semibold text-slate-500">{inv.dueDate}</td>
+                    <td className="py-4 px-4 text-center">
+                      {inv.status === 'paid' ? (
+                        <span className="bg-green-50 text-green-700 border border-green-150 text-[10px] font-black px-2.5 py-1 rounded-xl uppercase">
+                          PAID & SETTLED
+                        </span>
+                      ) : (
+                        <span className="bg-rose-50 text-rose-700 border border-rose-150 text-[10px] font-black px-2.5 py-1 rounded-xl uppercase animate-pulse">
+                          PENDING PAYMENT
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-4 px-5 text-right">
+                      {inv.status === 'paid' ? (
+                        <button 
+                          onClick={() => viewReceipt(inv)}
+                          className="bg-slate-50 border border-slate-250 text-slate-600 hover:bg-slate-100 hover:text-slate-800 px-3.5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ml-auto cursor-pointer"
+                        >
+                          <Receipt size={12} /> Receipt
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => startPaymentFlow(inv)}
+                          className="bg-primary text-white hover:bg-opacity-95 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5 ml-auto cursor-pointer shadow-sm shadow-primary/20"
+                        >
+                          <CreditCard size={12} /> Pay Now
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Modern Safe Billing Transmission Disclaimer */}
@@ -453,11 +447,11 @@ export default function PaymentsPortal() {
 
             {/* Receipt metadata info */}
             <div className="grid grid-cols-2 gap-4 text-[10px] leading-relaxed border-b border-slate-100 pb-5">
-              <div className="space-y-1">
-                <span className="text-slate-400 uppercase tracking-widest block font-extrabold">Student Name / Admin Details</span>
-                <p className="font-bold text-slate-800 uppercase">Ajao Demola Simon</p>
-                <p className="text-[9px] text-slate-400">Class: SS3 Science Alpha</p>
-                <p className="text-[9px] text-slate-400">ID: FF-2023-SS3-059</p>
+              <div className="space-y-1 text-left">
+                <span className="text-slate-400 uppercase tracking-widest block font-extrabold text-[9px]">Student Name / Admin Details</span>
+                <p className="font-bold text-slate-800 uppercase text-[11px] leading-tight">{selectedReceipt.studentName || profile?.full_name || profile?.name || profile?.student_name || 'N/A'}</p>
+                <p className="text-[9px] text-slate-400">Class: {profile?.studentClass || profile?.class || 'N/A'}</p>
+                <p className="text-[9px] text-slate-400">ID: {profile?.studentId || profile?.id || 'N/A'}</p>
               </div>
               <div className="space-y-1 text-right">
                 <span className="text-slate-400 uppercase tracking-widest block font-extrabold">Transaction Reference</span>
