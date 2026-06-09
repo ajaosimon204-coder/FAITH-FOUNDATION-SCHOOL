@@ -31,7 +31,7 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 };
 
 const DashboardRedirect = () => {
-  const { profile, loading, user } = useAuth();
+  const { profile, loading, user, activeRole } = useAuth();
   const configError = getSupabaseConfigError();
 
   if (loading) return (
@@ -103,8 +103,6 @@ const DashboardRedirect = () => {
       </div>
     );
   }
-
-  const { activeRole } = useAuth();
 
   switch (activeRole) {
     case 'admin': return <AdminDashboard />;
