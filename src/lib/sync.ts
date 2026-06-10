@@ -255,8 +255,45 @@ export async function syncFetchStaff(): Promise<StaffRecord[]> {
   }
 
   try {
-    const { data: dbTeachers, error } = await supabase.from('teachers').select('*');
+    const { data: dbTeachersRaw, error } = await supabase.from('teachers').select('*');
     if (error) throw error;
+
+    const dbTeachers = dbTeachersRaw ? [...dbTeachersRaw] : [];
+
+    // Fetch registered users with role 'staff'
+    try {
+      const { data: dbStaffUsers } = await supabase.from('users').select('*').eq('role', 'staff');
+      if (dbStaffUsers && dbStaffUsers.length > 0) {
+        const existingEmails = new Set(dbTeachers.map(t => t.email?.toLowerCase()));
+        for (const u of dbStaffUsers) {
+          if (u.email && !existingEmails.has(u.email.toLowerCase())) {
+            const newTeacherId = `STF-${Math.floor(1000 + Math.random() * 9000)}`;
+            const freshTeacher = {
+              id: newTeacherId,
+              user_id: u.id,
+              name: u.full_name || 'Academic Instructor',
+              role: 'Academic Instructor',
+              email: u.email,
+              phone: '08123456789',
+              photo_url: u.avatar_url || '',
+              date_of_appointment: new Date().toISOString().split('T')[0],
+              salary: '₦250,000 / month',
+              award: 'Associate Instructor Badge',
+              punctuality_attendance: '100%',
+              regularity_attendance: '100%',
+              rating: '5.0',
+              review: 'Official registered staff member.'
+            };
+            
+            // Back-populate to teachers table
+            await supabase.from('teachers').upsert(freshTeacher);
+            dbTeachers.push(freshTeacher);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Could not heal missing teachers from users table:', e);
+    }
 
     let assignments: Record<string, string> = {};
     try {
@@ -317,7 +354,7 @@ export async function syncFetchStaff(): Promise<StaffRecord[]> {
       localStorage.setItem(localKey, JSON.stringify(records));
       return records;
     }
-    return fallback;
+    return [];
   } catch (err) {
     console.warn('Sync fetch teachers failed, using fallback:', err);
     return fallback;

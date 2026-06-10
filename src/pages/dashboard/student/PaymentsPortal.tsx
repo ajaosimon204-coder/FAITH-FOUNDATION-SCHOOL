@@ -254,8 +254,8 @@ export default function PaymentsPortal() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
-                {invoices.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors">
+                {invoices.map((inv, index) => (
+                  <tr key={`${inv.id}-${index}`} className="hover:bg-slate-50/50 transition-colors">
                     <td className="py-4 px-5 font-mono text-slate-500 font-bold">{inv.id}</td>
                     <td className="py-4 px-4 font-extrabold text-slate-800 uppercase">{inv.item}</td>
                     <td className="py-4 px-4 text-center font-mono font-black text-slate-700">₦{inv.amount.toLocaleString()}</td>

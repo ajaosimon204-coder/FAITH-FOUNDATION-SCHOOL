@@ -3418,8 +3418,8 @@ function FinanceView() {
                       </td>
                     </tr>
                   ) : (
-                    filteredInvoices.map(inv => (
-                      <tr key={inv.id} className="hover:bg-slate-50/50 transition-colors">
+                    filteredInvoices.map((inv, index) => (
+                      <tr key={`${inv.id}-${index}`} className="hover:bg-slate-50/50 transition-colors">
                         <td className="py-3.5 px-4">
                           <p className="font-mono text-primary font-bold">{inv.id}</p>
                           <p className="text-slate-700 font-extrabold uppercase tracking-tight mt-0.5">{inv.studentName}</p>

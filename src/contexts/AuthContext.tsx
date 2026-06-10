@@ -184,10 +184,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Check initial session
     try {
-      supabase.auth.getSession().then(({ data: { session } }) => {
+      supabase.auth.getSession().then((res) => {
         // Don't override sandbox session
         if (localStorage.getItem('faith_foundation_sandbox_session')) return;
 
+        const errVal = res?.error;
+        const errMsg = errVal?.message || '';
+        const isRefreshTokenError = 
+          errMsg.toLowerCase().includes('refresh token') || 
+          errMsg.toLowerCase().includes('invalid_grant');
+
+        if (isRefreshTokenError) {
+          console.warn('Handling invalid refresh token by clearing local storage supabase auth keys:', errMsg);
+          Object.keys(localStorage).forEach(k => {
+            if (k.startsWith('sb-') && k.includes('-auth-token')) {
+              localStorage.removeItem(k);
+            }
+          });
+          supabase.auth.signOut().catch(() => {});
+          setUser(null);
+          setLoading(false);
+          clearTimeout(timeout);
+          return;
+        }
+
+        const session = res?.data?.session ?? null;
         const currentUser = session?.user ?? null;
         setUser(currentUser);
         if (currentUser) {
@@ -199,6 +220,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }).catch(err => {
         const msg = err?.message || String(err) || '';
         const errStr = (String(err) + ' ' + msg + ' ' + (typeof err === 'object' ? JSON.stringify(err) : '')).toLowerCase();
+
+        if (errStr.includes('refresh token') || errStr.includes('invalid_grant')) {
+          console.warn('Caught refresh token error in catch block, purging invalid token data...');
+          Object.keys(localStorage).forEach(k => {
+            if (k.startsWith('sb-') && k.includes('-auth-token')) {
+              localStorage.removeItem(k);
+            }
+          });
+          supabase.auth.signOut().catch(() => {});
+        }
+
         const isNetworkError = 
           errStr.includes('fetch') ||
           errStr.includes('network') ||

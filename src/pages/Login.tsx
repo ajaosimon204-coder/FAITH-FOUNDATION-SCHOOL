@@ -360,6 +360,27 @@ export default function Login() {
             full_name: fullName || (signUpRole === 'admin' ? 'Super Admin' : signUpRole === 'staff' ? 'Academic Lead' : 'Pupil Portal'),
             updated_at: new Date().toISOString()
           });
+
+          if (signUpRole === 'staff') {
+            const teacherId = `STF-${Math.floor(1000 + Math.random() * 9000)}`;
+            await supabase.from('teachers').upsert({
+              id: teacherId,
+              user_id: user.id,
+              name: fullName || 'Academic Instructor',
+              role: 'Academic Instructor',
+              email: email,
+              phone: '08123456789',
+              photo_url: '',
+              date_of_appointment: new Date().toISOString().split('T')[0],
+              salary: '₦250,000 / month',
+              award: 'Associate Instructor Badge',
+              punctuality_attendance: '100%',
+              regularity_attendance: '100%',
+              rating: '5.0',
+              review: 'New staff member registered successfully.'
+            });
+          }
+
           setError('Success! Please check your email for a confirmation link (if enabled) or try logging in.');
           setIsSignUp(false);
         }
@@ -381,6 +402,32 @@ export default function Login() {
           profile = fetchedProfile;
 
           if (profile) {
+            if (profile.role === 'staff') {
+              const { data: existingTeacher } = await supabase
+                .from('teachers')
+                .select('*')
+                .eq('email', profile.email || email)
+                .maybeSingle();
+              if (!existingTeacher) {
+                const teacherId = `STF-${Math.floor(1000 + Math.random() * 9000)}`;
+                await supabase.from('teachers').upsert({
+                  id: teacherId,
+                  user_id: user.id,
+                  name: profile.full_name || 'Academic Instructor',
+                  role: 'Academic Instructor',
+                  email: profile.email || email,
+                  phone: '08123456789',
+                  photo_url: '',
+                  date_of_appointment: new Date().toISOString().split('T')[0],
+                  salary: '₦250,000 / month',
+                  award: 'Associate Instructor Badge',
+                  punctuality_attendance: '100%',
+                  regularity_attendance: '100%',
+                  rating: '5.0',
+                  review: 'Staff member profile auto-populated on system login.'
+                });
+              }
+            }
             switchRole(loginPortal);
             navigate('/dashboard');
           } else {
