@@ -67,12 +67,71 @@ import {
 
 import Communications from './Communications';
 import CloudLocker from './CloudLocker';
+import AdminAuditLog from '../../components/AdminAuditLog';
+import ReportingDashboard from './ReportingDashboard';
 
 // ============================================================================
 // 1. MAIN ROUTING & PERSISTENCE
 // ============================================================================
 
 export default function AdminDashboard() {
+  const { isSandbox } = useAuth();
+
+  useEffect(() => {
+    // 1. Setup Postgres Changes Realtime Listener for 'profiles' insertions in Supabase
+    let channel: any = null;
+    if (!isSandbox) {
+      try {
+        console.log('[Realtime Listener] Listening to profiles table insertions...');
+        channel = supabase
+          .channel('realtime-profiles-sync-listener')
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'profiles'
+            },
+            (payload) => {
+              console.log('[Realtime Listener] New profile detected:', payload);
+              const newProfile = payload.new;
+              if (newProfile && newProfile.role === 'staff') {
+                const nameStr = newProfile.full_name || newProfile.email || 'A staff member';
+                showBannerAlert(`New Staff Sync: ${nameStr} successfully synchronized!`, true);
+              }
+            }
+          )
+          .subscribe((status) => {
+            console.log('[Realtime Listener] Subscription Status:', status);
+          });
+      } catch (err) {
+        console.error('Error starting Supabase profiles insertion listener:', err);
+      }
+    }
+
+    // 2. Setup standard DOM Event listener for local sandbox environment simulation
+    const handleLocalProfileInsert = (e: any) => {
+      const { email, full_name, role } = e.detail || {};
+      if (role === 'staff') {
+        const nameStr = full_name || email || 'A staff member';
+        showBannerAlert(`New Staff Sync: ${nameStr} successfully synchronized!`, true);
+      }
+    };
+
+    window.addEventListener('supabase:profiles:insert', handleLocalProfileInsert as EventListener);
+
+    return () => {
+      window.removeEventListener('supabase:profiles:insert', handleLocalProfileInsert as EventListener);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch (err) {
+          console.error('[Realtime Listener Cleanup] error:', err);
+        }
+      }
+    };
+  }, [isSandbox]);
+
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-300">
       <Routes>
@@ -86,6 +145,7 @@ export default function AdminDashboard() {
         <Route path="/cms" element={<ContentEditor />} />
         <Route path="/settings" element={<SettingsView />} />
         <Route path="/locker" element={<CloudLocker />} />
+        <Route path="/reporting" element={<ReportingDashboard />} />
       </Routes>
     </div>
   );
@@ -2013,53 +2073,9 @@ function StaffView() {
         </div>
       )}
 
-      {/* University-Grade Teacher Activity Audit Ledger */}
-      <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm mt-10 space-y-5 font-sans">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 pb-3 border-b border-slate-100">
-          <div>
-            <h3 className="text-sm font-black tracking-tight text-slate-800 flex items-center gap-2">
-              <ShieldCheck className="text-secondary" size={18} />
-              University academic Audit Logs & Accountability Ledger
-            </h3>
-            <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider font-extrabold">Real-time system-wide log for learning material, assignments, grades and attendance revisions.</p>
-          </div>
-          <button 
-            type="button"
-            onClick={() => {
-              const savedLogs = localStorage.getItem('ff_activity_logs');
-              setActivityLogs(savedLogs ? JSON.parse(savedLogs) : []);
-            }}
-            className="text-[9px] font-black uppercase text-secondary hover:underline cursor-pointer bg-secondary/5 px-4 py-2 rounded-xl self-start sm:self-auto"
-          >
-            Refresh Logs
-          </button>
-        </div>
-
-        <div className="max-h-[350px] overflow-y-auto space-y-3.5 pr-2">
-          {activityLogs.length === 0 ? (
-            <p className="text-[10px] uppercase tracking-widest text-slate-400 font-mono italic py-10 text-center">No teacher academic activities registered yet.</p>
-          ) : (
-            activityLogs.map((log: any) => (
-              <div key={log.id} className="p-4 border rounded-3xl bg-slate-50/45 flex justify-between items-start gap-4 hover:border-slate-200 transition-colors">
-                <div className="space-y-1.5">
-                  <div className="flex gap-2.5 items-center flex-wrap">
-                    <span className="text-[8px] bg-secondary text-white font-black px-2 py-0.5 rounded-lg font-mono uppercase tracking-widest text-center">
-                      {log.action}
-                    </span>
-                    <span className="text-[10px] font-black text-slate-700 font-mono">
-                      {log.user_email}
-                    </span>
-                  </div>
-                  <p className="text-xs font-bold text-slate-600 leading-snug">{log.details}</p>
-                </div>
-                <span className="text-[9px] text-slate-400 font-bold whitespace-nowrap font-mono uppercase text-right">
-                  {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}{" "}
-                  {new Date(log.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
+      {/* University-Grade System Diagnostics, Health Checks & Audit Ledger */}
+      <div className="mt-10">
+        <AdminAuditLog />
       </div>
         </>
       ) : (

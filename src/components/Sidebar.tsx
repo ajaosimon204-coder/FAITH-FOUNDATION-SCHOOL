@@ -18,7 +18,8 @@ import {
   Trophy,
   Tv,
   Cloud,
-  X
+  X,
+  TrendingUp
 } from 'lucide-react';
 
 function hasCompletedTermlyExam(profile: any) {
@@ -47,6 +48,7 @@ export const Sidebar = ({ mobileOpen, setMobileOpen }: { mobileOpen?: boolean; s
 
   const adminLinks = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
+    { to: '/dashboard/reporting', icon: TrendingUp, label: 'Reporting' },
     { to: '/dashboard/students', icon: Users, label: 'Students' },
     { to: '/dashboard/staff', icon: GraduationCap, label: 'Staff' },
     { to: '/dashboard/finance', icon: CreditCard, label: 'Finance' },
@@ -71,6 +73,7 @@ export const Sidebar = ({ mobileOpen, setMobileOpen }: { mobileOpen?: boolean; s
 
   const staffLinks = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/dashboard/reporting', icon: TrendingUp, label: 'Reporting' },
     { to: '/dashboard/grading', icon: ClipboardCheck, label: 'Grading' },
     { to: '/dashboard/materials', icon: BookOpen, label: 'Materials' },
     { to: '/dashboard/attendance-teacher', icon: Calendar, label: 'Tracking' },

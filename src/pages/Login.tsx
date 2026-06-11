@@ -488,6 +488,12 @@ export default function Login() {
             data: {
               full_name: fullName,
               role: signUpRole,
+              phone: loginPortal === 'staff' ? staffPhone : '',
+              qualification: loginPortal === 'staff' ? staffQualification : '',
+              experience: loginPortal === 'staff' ? staffExperience : '',
+              bio: loginPortal === 'staff' ? staffBio : '',
+              role_field: loginPortal === 'staff' ? staffRoleField : '',
+              salary: loginPortal === 'staff' ? staffSalary : '',
             },
           },
         });
@@ -1010,57 +1016,101 @@ export default function Login() {
                 <CheckCircle size={36} />
               </div>
               
-              <h3 className="text-2xl font-black text-gray-950 tracking-tight">Enrollment Success Confirmed!</h3>
+              <h3 className="text-2xl font-black text-gray-950 tracking-tight font-display text-emerald-900">Account Request Created!</h3>
               
-              <div className="bg-emerald-50/70 p-5 rounded-2xl border border-emerald-100 text-left text-xs leading-relaxed space-y-2 text-slate-800">
+              <div className="bg-emerald-50/70 p-5 rounded-2xl border border-emerald-100 text-left text-xs leading-relaxed space-y-3 text-slate-800">
                 <p>
-                  <strong>Registry Link Complete:</strong> Hello, <span className="font-extrabold text-emerald-900">{signUpSuccessUser.name}</span>!
+                  <strong>Institutional Registry Processing:</strong> Hello, <span className="font-extrabold text-emerald-950">{signUpSuccessUser.name}</span>!
                 </p>
-                <p>
-                  Your professional bio-profile and teaching credentials have been securely stored in the system registry. Your credentials are now active under the official staff directory.
-                </p>
-                <p className="font-semibold text-emerald-800">
-                  ✓ Click the action button below to confirm this notice and route directly to your workspace dashboard.
+                <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 space-y-2 text-slate-850">
+                  <p className="font-black text-amber-900 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                     Verification Required
+                  </p>
+                  <p className="font-bold">
+                    We have sent a verification email to: <br/>
+                    <span className="font-black text-emerald-950 hover:underline">{signUpSuccessUser.email}</span>
+                  </p>
+                  <p className="text-[11px] leading-normal text-amber-950">
+                    You <strong>MUST</strong> check your inbox (including your junk/spam folders) and click the confirmation link in the email before attempting to log in on the live system.
+                  </p>
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium">
+                  * Note: If your system registry has email verification disabled, you can click "I Have Verified, Sign In!" immediately.
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={async () => {
-                  if (isSupabaseConfigured) {
-                    setLoading(true);
-                    try {
-                      localStorage.removeItem('faith_foundation_sandbox_session');
-                      const { error: signInError } = await supabase.auth.signInWithPassword({
-                        email: signUpSuccessUser.email,
-                        password: password,
-                      });
-                      if (signInError) throw signInError;
-                      setSignUpSuccessUser(null);
-                      setIsSignUp(false);
-                      switchRole('staff');
-                      navigate('/dashboard');
-                    } catch (e: any) {
-                      console.error('Real login failed on confirmation redirect:', e);
+              {error && (
+                <div className="p-4 bg-rose-50 border border-rose-150 rounded-xl text-left text-xs font-bold text-rose-850 animate-shake">
+                  {error}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={async () => {
+                    if (isSupabaseConfigured) {
+                      setLoading(true);
+                      setError('');
+                      try {
+                        localStorage.removeItem('faith_foundation_sandbox_session');
+                        const { error: signInError } = await supabase.auth.signInWithPassword({
+                          email: signUpSuccessUser.email,
+                          password: password,
+                        });
+                        if (signInError) throw signInError;
+                        
+                        setSignUpSuccessUser(null);
+                        setIsSignUp(false);
+                        switchRole('staff');
+                        navigate('/dashboard');
+                      } catch (e: any) {
+                        console.error('Real login failed on confirmation redirect:', e);
+                        const msg = e?.message || String(e);
+                        setError(`Access Denied: ${msg}. If you just registered, please ensure you clicked the confirmation link in your email first!`);
+                      } finally {
+                        setLoading(false);
+                      }
+                    } else {
                       loginAsDemo(signUpSuccessUser.email, 'staff', signUpSuccessUser.name);
                       setSignUpSuccessUser(null);
                       setIsSignUp(false);
                       navigate('/dashboard');
-                    } finally {
-                      setLoading(false);
                     }
-                  } else {
-                    loginAsDemo(signUpSuccessUser.email, 'staff', signUpSuccessUser.name);
-                    setSignUpSuccessUser(null);
-                    setIsSignUp(false);
-                    navigate('/dashboard');
-                  }
-                }}
-                className="w-full py-4 px-6 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-lg rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2"
-              >
-                <span>Confirm & Direct to Dashboard</span>
-                <ArrowRight size={20} />
-              </button>
+                  }}
+                  className="w-full py-4 px-6 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-lg rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2"
+                >
+                  {loading ? <Loader2 className="animate-spin" /> : <span>I Have Verified, Sign In Directly!</span>}
+                  {!loading && <ArrowRight size={20} />}
+                </button>
+
+                <div className="flex justify-between items-center px-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSignUpSuccessUser(null);
+                      setIsSignUp(false);
+                    }}
+                    className="text-xs font-bold text-gray-500 hover:text-gray-900 transition-colors uppercase tracking-wider"
+                  >
+                    Back to Form
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      loginAsDemo(signUpSuccessUser.email, 'staff', signUpSuccessUser.name);
+                      setSignUpSuccessUser(null);
+                      setIsSignUp(false);
+                      navigate('/dashboard');
+                    }}
+                    className="text-xs font-extrabold text-amber-600 hover:text-amber-800 transition-colors uppercase tracking-wider"
+                  >
+                    Enter in Sandbox Anyway
+                  </button>
+                </div>
+              </div>
             </div>
           ) : !firstLoginStudent && !recoveryOpen && (
             <div>

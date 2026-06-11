@@ -87,6 +87,9 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
   const [newNoteSize, setNewNoteSize] = useState('2.5 MB');
   const [newNoteAuthor, setNewNoteAuthor] = useState('Dr. Adekunle Johnson');
   const [newNoteFileUrl, setNewNoteFileUrl] = useState('');
+  const [newNoteGrade, setNewNoteGrade] = useState('SS3');
+  const [newNoteIsTextbook, setNewNoteIsTextbook] = useState(false);
+  const [newNoteDesc, setNewNoteDesc] = useState('');
 
   // LMS New assignment form
   const [newAsgSubject, setNewAsgSubject] = useState('Mathematics');
@@ -570,7 +573,11 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
       type: newNoteType,
       sizeOrDuration: newNoteSize,
       author: newNoteAuthor,
-      fileUrl: newNoteFileUrl
+      fileUrl: newNoteFileUrl || '#',
+      gradeLevel: newNoteGrade,
+      isTextbook: newNoteIsTextbook,
+      description: newNoteDesc || 'No formal synopsis described.',
+      uploadDate: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' })
     };
 
     const updated = [newLec, ...lectures];
@@ -578,8 +585,9 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
     localStorage.setItem('ff_lecture_notes', JSON.stringify(updated));
     setNewNoteTitle('');
     setNewNoteFileUrl('');
-    showSuccessBanner('Institutional syllabus lecture note published successfully to learning hub.');
-    logAudit('Material Upload', `Uploaded and published classroom learning material "${newNoteTitle}" for Subject: ${newNoteSubject}`);
+    setNewNoteDesc('');
+    showSuccessBanner('Institutional syllabus learning material reference published successfully to resource repository.');
+    logAudit('Material Upload', `Uploaded and published classroom learning material "${newNoteTitle}" for Subject: ${newNoteSubject} for Grade: ${newNoteGrade}`);
   };
 
   const deleteAssignment = (id: string) => {
@@ -2177,6 +2185,49 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block mb-1 font-bold text-[9px] uppercase text-slate-400">Target Grade Level</label>
+                      <select
+                        value={newNoteGrade}
+                        onChange={(e) => setNewNoteGrade(e.target.value)}
+                        className="w-full border rounded-xl p-3 bg-white text-slate-700 font-bold"
+                      >
+                        <option value="SS3">Senior Secondary School 3 (SS3)</option>
+                        <option value="SS2">Senior Secondary School 2 (SS2)</option>
+                        <option value="SS1">Senior Secondary School 1 (SS1)</option>
+                        <option value="JS3">Junior Secondary School 3 (JS3)</option>
+                        <option value="JS2">Junior Secondary School 2 (JS2)</option>
+                        <option value="JS1">Junior Secondary School 1 (JS1)</option>
+                        <option value="Primary 6">Primary School 6</option>
+                        <option value="Primary 5">Primary School 5</option>
+                        <option value="Primary 4">Primary School 4</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-bold text-[9px] uppercase text-slate-400">Resource Category</label>
+                      <select
+                        value={newNoteIsTextbook ? "textbook" : "material"}
+                        onChange={(e) => setNewNoteIsTextbook(e.target.value === "textbook")}
+                        className="w-full border rounded-xl p-3 bg-white text-slate-700 font-bold"
+                      >
+                        <option value="material">Handout / Study Slide</option>
+                        <option value="textbook">Digitized Textbook / Manual</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 font-bold text-[9px] uppercase text-slate-400">Brief Synopsis / Description</label>
+                    <textarea 
+                      rows={2}
+                      placeholder="e.g., Fully indexed textbook covering syllabus requirements for the whole year."
+                      value={newNoteDesc}
+                      onChange={(e) => setNewNoteDesc(e.target.value)}
+                      className="w-full border p-3 rounded-xl bg-white focus:bg-white resize-none"
+                    />
+                  </div>
+
                   <button 
                     type="submit"
                     className="w-full bg-primary text-white py-3.5 rounded-xl font-black uppercase tracking-widest hover:bg-opacity-95 shadow shadow-primary/10 cursor-pointer"
@@ -2196,15 +2247,24 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
                       return <p className="text-[10px] uppercase tracking-widest text-slate-400 font-mono italic text-center py-6">No materials in your assigned subjects</p>;
                     }
                     return filtered.map((lec) => (
-                      <div key={lec.id} className="p-3 border rounded-xl flex justify-between items-center gap-3 bg-slate-50/40 hover:bg-white transition-all">
-                        <div>
-                          <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-1.5 py-0.5 rounded font-mono uppercase">{lec.subject}</span>
-                          <h5 className="font-bold text-slate-800 text-xs mt-1 leading-snug">{lec.title}</h5>
-                          <p className="text-[10px] text-slate-400 mt-1 uppercase font-semibold">{lec.type} &middot; {lec.sizeOrDuration} &middot; {lec.author}</p>
+                      <div key={lec.id} className="p-3.5 border rounded-xl flex justify-between items-start gap-3 bg-slate-50/40 hover:bg-white transition-all">
+                        <div className="space-y-1 flex-1">
+                          <div className="flex flex-wrap gap-1.5 items-center">
+                            <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-1.5 py-0.5 rounded font-mono uppercase">{lec.subject}</span>
+                            <span className="text-[9px] bg-violet-50 text-violet-600 font-bold px-1.5 py-0.5 rounded font-mono uppercase">{lec.gradeLevel || 'SS3'}</span>
+                            {lec.isTextbook && (
+                              <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200/50 font-bold px-1.5 py-0.5 rounded font-mono uppercase">📖 Textbook</span>
+                            )}
+                          </div>
+                          <h5 className="font-bold text-slate-850 text-xs leading-tight">{lec.title}</h5>
+                          {lec.description && (
+                            <p className="text-[10px] text-slate-500 font-normal leading-normal italic">{lec.description}</p>
+                          )}
+                          <p className="text-[9px] text-slate-400 mt-1 uppercase font-semibold">{lec.type} &middot; {lec.sizeOrDuration} &middot; {lec.author}</p>
                         </div>
                         <button
                           onClick={() => deleteLecture(lec.id)}
-                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
                           title="Delete resource file"
                         >
                           <Trash2 size={14} />

@@ -12,6 +12,7 @@ interface AuthContextType {
   logoutDemo: () => void;
   activeRole: 'admin' | 'staff' | 'student';
   switchRole: (role: 'admin' | 'staff' | 'student') => void;
+  runProfileDiagnostic: (userId: string, userEmail?: string) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -23,7 +24,8 @@ const AuthContext = createContext<AuthContextType>({
   loginAsStudent: () => {},
   logoutDemo: () => {},
   activeRole: 'student',
-  switchRole: () => {}
+  switchRole: () => {},
+  runProfileDiagnostic: async () => ({})
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -308,6 +310,180 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  const runProfileDiagnostic = async (userId: string, userEmail?: string): Promise<any> => {
+    console.info(`%c [Diagnostic Tracker] Initiating profile propagation analysis for user ID: ${userId}`, 'background: #0d1117; color: #58a6ff; font-weight: bold; padding: 4px;');
+    const report: any = {
+      timestamp: new Date().toISOString(),
+      userId,
+      userEmail,
+      authUser: null,
+      usersTableRecord: null,
+      profilesTableRecord: null,
+      teachersTableRecord: null,
+      success: false,
+      actionsTaken: []
+    };
+
+    try {
+      // 1. Fetch current auth user state
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        console.error('[Diagnostic Tracker] Error retrieving authenticated user info:', authError);
+        report.authError = authError.message;
+      } else {
+        report.authUser = authUser;
+        console.log('[Diagnostic Tracker] Current authenticated user metadata:', authUser?.user_metadata);
+      }
+
+      // 2. Query public.users table (main profiles table in this app)
+      const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId);
+
+      if (usersError) {
+        console.error('[Diagnostic Tracker] Error querying public.users table:', usersError);
+        report.usersError = usersError.message;
+      } else {
+        report.usersTableRecord = usersData?.[0] || null;
+        console.log('[Diagnostic Tracker] public.users table query result:', usersData);
+      }
+
+      // 3. Query public.profiles table (fallback check in case of legacy system references)
+      try {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId);
+        if (!profilesError && profilesData) {
+          report.profilesTableRecord = profilesData[0] || null;
+          console.log('[Diagnostic Tracker] Optional public.profiles table check query result:', profilesData);
+        }
+      } catch (e) {
+        console.log('[Diagnostic Tracker] Bypassing optional profiles table check (table structure may be mapped to public.users).');
+      }
+
+      // 4. Query public.teachers table
+      try {
+        const { data: teachersData } = await supabase
+          .from('teachers')
+          .select('*')
+          .eq('user_id', userId);
+        report.teachersTableRecord = teachersData?.[0] || null;
+        console.log('[Diagnostic Tracker] public.teachers table query result:', teachersData);
+      } catch (e) {
+        console.error('[Diagnostic Tracker] Error querying public.teachers table:', e);
+      }
+
+      // 5. Build parameters for fallback generation
+      const email = authUser?.email || userEmail || '';
+      const signupRole = authUser?.user_metadata?.role || 'student';
+      const fullName = authUser?.user_metadata?.full_name || email.split('@')[0] || 'Academic Instructor';
+
+      // 6. Actively create the profile record in public.users if missing
+      if (!report.usersTableRecord) {
+        console.warn(`%c [Diagnostic Tracker] GAP DETECTED: Missing profile in 'public.users' for ${email}. Auto-generating...`, 'background: #3a1d1d; color: #ff7b72; padding: 2px;');
+        
+        const newProfile = {
+          id: userId,
+          email: email,
+          role: signupRole,
+          full_name: fullName,
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: insertedUser, error: insertError } = await supabase
+          .from('users')
+          .upsert(newProfile)
+          .select();
+
+        if (insertError) {
+          console.error('[Diagnostic Tracker] Critical error writing to public.users:', insertError);
+          report.actionsTaken.push(`Failed to insert into public.users: ${insertError.message}`);
+        } else {
+          console.info('[Diagnostic Tracker] Corrected missing public.users (profile) record successfully.', insertedUser);
+          report.usersTableRecord = insertedUser?.[0] || newProfile;
+          report.actionsTaken.push('Auto-created missing profile record in public.users');
+        }
+      }
+
+      // 7. Actively create in public.profiles table if the table exists (for full assurance)
+      try {
+        const profileRecord = {
+          id: userId,
+          email: email,
+          role: signupRole,
+          full_name: fullName,
+          updated_at: new Date().toISOString()
+        };
+        const { error: pError } = await supabase
+          .from('profiles')
+          .upsert(profileRecord);
+        if (!pError) {
+          console.info('[Diagnostic Tracker] Successfully populated optional public.profiles record.');
+          report.actionsTaken.push('Populated public.profiles records table');
+        }
+      } catch (_) {
+        // Safe to ignore if table does not exist
+      }
+
+      // 8. If the user is staff, ensure the public.teachers dossier exists and is fully populated
+      if (signupRole === 'staff') {
+        const { data: teacherRow } = await supabase
+          .from('teachers')
+          .select('*')
+          .eq('email', email);
+
+        if (!teacherRow || teacherRow.length === 0) {
+          console.warn('[Diagnostic Tracker] GAP DETECTED: Missing teacher roster dossier. Auto-healing now...');
+          
+          const metaPhone = authUser?.user_metadata?.phone || '08123456789';
+          const metaQual = authUser?.user_metadata?.qualification || 'B.Ed';
+          const metaExp = authUser?.user_metadata?.experience || '3-5 Years';
+          const metaBio = authUser?.user_metadata?.bio || 'Dedicated educational instructor.';
+          const metaRole = authUser?.user_metadata?.role_field || 'Academic Instructor';
+          const metaSalary = authUser?.user_metadata?.salary || '₦250,000 / month';
+
+          const teacherId = `STF-${Math.floor(1000 + Math.random() * 9000)}`;
+          const bioReviewText = `${metaQual} • ${metaExp} Experience • ${metaBio}`;
+
+          const { error: teacherInsErr } = await supabase.from('teachers').insert({
+            id: teacherId,
+            user_id: userId,
+            name: fullName,
+            role: metaRole,
+            email: email,
+            phone: metaPhone,
+            photo_url: '',
+            date_of_appointment: new Date().toISOString().split('T')[0],
+            salary: metaSalary,
+            award: 'Associate Instructor Badge',
+            punctuality_attendance: '100%',
+            regularity_attendance: '100%',
+            rating: '5.0',
+            review: bioReviewText
+          });
+
+          if (teacherInsErr) {
+            console.error('[Diagnostic Tracker] Error inserting staff roster:', teacherInsErr);
+            report.actionsTaken.push(`Failed to insert teacher roster: ${teacherInsErr.message}`);
+          } else {
+            console.log('[Diagnostic Tracker] Restored missing staff teachers roster record!');
+            report.actionsTaken.push('Auto-created missing staff roster in public.teachers');
+          }
+        }
+      }
+
+      report.success = true;
+    } catch (err: any) {
+      console.error('[Diagnostic Tracker] Failed to run profile propagation diagnostic scan:', err);
+      report.fatalError = err?.message || String(err);
+    }
+
+    console.info('%c [Diagnostic Tracker] Diagnostics scan finished. Report details below:', 'background: #0d1117; color: #58a6ff; font-weight: bold; padding: 4px;', report);
+    return report;
+  };
+
   const fetchProfile = async (userId: string, userEmail?: string) => {
     try {
       const { data, error } = await supabase
@@ -331,9 +507,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
         setProfile(currentProfile);
+
+        // Auto-heal missing teacher dossiers in database for authenticated staff
+        if (currentProfile?.role === 'staff') {
+          try {
+            const { data: teacherRow } = await supabase
+              .from('teachers')
+              .select('*')
+              .eq('email', currentProfile.email);
+
+            if (!teacherRow || teacherRow.length === 0) {
+              console.log('No teacher roster found for validated staff, auto-healing...');
+              
+              // Safely grab user-metadata or defaults
+              let metaPhone = '';
+              let metaQual = 'B.Ed';
+              let metaExp = '3-5 Years';
+              let metaBio = 'Dedicated educational instructor.';
+              let metaRole = 'Academic Instructor';
+              let metaSalary = '₦250,000 / month';
+
+              try {
+                const { data: { user: authUser } } = await supabase.auth.getUser();
+                if (authUser && authUser.user_metadata) {
+                  const uMeta = authUser.user_metadata;
+                  metaPhone = uMeta.phone || '';
+                  metaQual = uMeta.qualification || 'B.Ed';
+                  metaExp = uMeta.experience || '3-5 Years';
+                  metaBio = uMeta.bio || 'Dedicated educational instructor.';
+                  metaRole = uMeta.role_field || 'Academic Instructor';
+                  metaSalary = uMeta.salary || '₦250,000 / month';
+                }
+              } catch (_) {
+                // Ignore failure to fetch auth-user
+              }
+
+              const teacherId = `STF-${Math.floor(1000 + Math.random() * 9000)}`;
+              const bioReviewText = `${metaQual} • ${metaExp} Experience • ${metaBio}`;
+
+              await supabase.from('teachers').insert({
+                id: teacherId,
+                user_id: userId,
+                name: currentProfile.full_name || 'Academic Instructor',
+                role: metaRole,
+                email: currentProfile.email,
+                phone: metaPhone || '08123456789',
+                photo_url: '',
+                date_of_appointment: new Date().toISOString().split('T')[0],
+                salary: metaSalary,
+                award: 'Associate Instructor Badge',
+                punctuality_attendance: '100%',
+                regularity_attendance: '100%',
+                rating: '5.0',
+                review: bioReviewText
+              });
+              console.log('Successfully self-healed missing teacher roster record!');
+            }
+          } catch (autoErr) {
+            console.error('Error auto-healing teacher profile on load:', autoErr);
+          }
+        }
       } else {
-        // Handle case where auth user exists but record in users table doesn't yet
-        setProfile(null);
+        // Handle case where auth user exists but record in users table doesn't yet - run diagnostic and heal
+        console.warn(`[AuthContext] No profile found in 'users' table on load for user ${userId}. Running diagnostics...`);
+        const diagReport = await runProfileDiagnostic(userId, userEmail);
+        if (diagReport && diagReport.success && diagReport.usersTableRecord) {
+          console.info('[AuthContext] Diagnostic auto-created missing user profile record.');
+          setProfile(diagReport.usersTableRecord);
+        } else {
+          setProfile(null);
+        }
       }
     } catch (err: any) {
       const msg = err?.message || String(err) || '';
@@ -429,7 +672,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, isSandbox]);
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isSandbox, loginAsDemo, loginAsStudent, logoutDemo, activeRole, switchRole }}>
+    <AuthContext.Provider value={{ user, profile, loading, isSandbox, loginAsDemo, loginAsStudent, logoutDemo, activeRole, switchRole, runProfileDiagnostic }}>
       {children}
     </AuthContext.Provider>
   );

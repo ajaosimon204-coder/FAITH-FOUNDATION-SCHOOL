@@ -21,6 +21,17 @@ CREATE TABLE IF NOT EXISTS public.users (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- A2. Profiles Table Synonym (public.profiles)
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  role TEXT DEFAULT 'student' CHECK (role IN ('admin', 'staff', 'student')),
+  avatar_url TEXT,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- B. Site Content Table (public.site)
 CREATE TABLE IF NOT EXISTS public.site (
   id TEXT PRIMARY KEY,
@@ -232,6 +243,7 @@ CREATE TABLE IF NOT EXISTS public.activity_logs (
 -- 2. ROW LEVEL SECURITY (RLS) ENABLING
 -- ==========================================
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.site ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
@@ -274,6 +286,7 @@ $$ LANGUAGE plpgsql;
 
 -- Clean existing policies safely
 SELECT public.drop_all_policies('users');
+SELECT public.drop_all_policies('profiles');
 SELECT public.drop_all_policies('site');
 SELECT public.drop_all_policies('admissions');
 SELECT public.drop_all_policies('notifications');
@@ -309,7 +322,31 @@ CREATE POLICY "Users update own profile" ON public.users FOR UPDATE USING (
   OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
   OR (auth.jwt() ->> 'email') IN ('faithfoundation480@gmail.com', 'ajaosimon3@gmail.com')
 );
+CREATE POLICY "Anyone can insert own profile" ON public.users FOR INSERT WITH CHECK (
+  auth.uid() = id
+  OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+);
 CREATE POLICY "Admins full management users" ON public.users FOR ALL USING (
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+  OR (auth.jwt() ->> 'email') IN ('faithfoundation480@gmail.com', 'ajaosimon3@gmail.com')
+);
+
+-- 1b. Profiles table policies
+CREATE POLICY "Profiles view own/staff/admin" ON public.profiles FOR SELECT USING (
+  auth.uid() = id 
+  OR (auth.jwt() -> 'user_metadata' ->> 'role') IN ('admin', 'staff')
+  OR (auth.jwt() ->> 'email') IN ('faithfoundation480@gmail.com', 'ajaosimon3@gmail.com')
+);
+CREATE POLICY "Profiles update own/admin" ON public.profiles FOR UPDATE USING (
+  auth.uid() = id 
+  OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+  OR (auth.jwt() ->> 'email') IN ('faithfoundation480@gmail.com', 'ajaosimon3@gmail.com')
+);
+CREATE POLICY "Anyone can insert own profile record" ON public.profiles FOR INSERT WITH CHECK (
+  auth.uid() = id
+  OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+);
+CREATE POLICY "Admins full management profiles" ON public.profiles FOR ALL USING (
   (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
   OR (auth.jwt() ->> 'email') IN ('faithfoundation480@gmail.com', 'ajaosimon3@gmail.com')
 );
@@ -366,6 +403,11 @@ CREATE POLICY "Anyone authenticated can view staff list" ON public.teachers FOR 
 CREATE POLICY "Staff can update own record" ON public.teachers FOR UPDATE USING (
   LOWER(email) = LOWER(auth.jwt() ->> 'email')
   OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+);
+CREATE POLICY "Anyone can insert staff record" ON public.teachers FOR INSERT WITH CHECK (
+  LOWER(email) = LOWER(auth.jwt() ->> 'email')
+  OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+  OR (auth.jwt() ->> 'email') IN ('faithfoundation480@gmail.com', 'ajaosimon3@gmail.com')
 );
 CREATE POLICY "Admins full manage teachers" ON public.teachers FOR ALL USING (
   (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
@@ -477,24 +519,84 @@ CREATE POLICY "Anyone insert audits" ON public.activity_logs FOR INSERT WITH CHE
 -- ==========================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_role TEXT;
+  v_name TEXT;
+  v_teacher_id TEXT;
+  v_bio_text TEXT;
 BEGIN
-  INSERT INTO public.users (id, email, full_name, role)
-  VALUES (
-    new.id, 
-    new.email, 
-    COALESCE(new.raw_user_meta_data->>'full_name', 'User'), 
-    CASE 
-      WHEN LOWER(new.email) IN ('faithfoundation480@gmail.com', 'ajaosimon3@gmail.com') THEN 'admin'
-      ELSE COALESCE(new.raw_user_meta_data->>'role', 'student')
-    END
-  )
-  ON CONFLICT (id) DO UPDATE SET
-    email = EXCLUDED.email,
-    role = CASE 
-      WHEN LOWER(EXCLUDED.email) IN ('faithfoundation480@gmail.com', 'ajaosimon3@gmail.com') THEN 'admin'
-      ELSE COALESCE(EXCLUDED.role, users.role)
-    END,
-    full_name = COALESCE(EXCLUDED.full_name, users.full_name);
+  v_role := CASE 
+    WHEN LOWER(new.email) IN ('faithfoundation480@gmail.com', 'ajaosimon3@gmail.com') THEN 'admin'
+    ELSE COALESCE(new.raw_user_meta_data->>'role', 'student')
+  END;
+  v_name := COALESCE(new.raw_user_meta_data->>'full_name', 'User');
+
+  -- Insert/update public.users
+  BEGIN
+    INSERT INTO public.users (id, email, full_name, role)
+    VALUES (new.id, new.email, v_name, v_role)
+    ON CONFLICT (id) DO UPDATE SET
+      email = EXCLUDED.email,
+      role = v_role,
+      full_name = v_name;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO public.activity_logs (user_email, action, details)
+    VALUES (new.email, 'SIGNUP_ERROR_USERS', 'Failed to propagate profile to public.users table: ' || SQLERRM);
+  END;
+
+  -- Insert/update public.profiles
+  BEGIN
+    INSERT INTO public.profiles (id, email, full_name, role)
+    VALUES (new.id, new.email, v_name, v_role)
+    ON CONFLICT (id) DO UPDATE SET
+      email = EXCLUDED.email,
+      role = v_role,
+      full_name = v_name;
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO public.activity_logs (user_email, action, details)
+    VALUES (new.email, 'SIGNUP_ERROR_PROFILES', 'Failed to propagate profile to public.profiles synonym table: ' || SQLERRM);
+  END;
+
+  -- If the role is staff, automatically populate public.teachers too
+  IF v_role = 'staff' THEN
+    v_teacher_id := 'STF-' || FLOOR(1000 + random() * 9000)::TEXT;
+    v_bio_text := COALESCE(new.raw_user_meta_data->>'qualification', 'B.Ed') || ' • ' || 
+                  COALESCE(new.raw_user_meta_data->>'experience', '3-5 Years') || ' Experience • ' || 
+                  COALESCE(new.raw_user_meta_data->>'bio', 'Dedicated educational instructor.');
+
+    BEGIN
+      INSERT INTO public.teachers (
+        id, user_id, name, role, email, phone, photo_url, date_of_appointment, salary, award, punctuality_attendance, regularity_attendance, rating, review
+      )
+      VALUES (
+        v_teacher_id,
+        new.id,
+        COALESCE(v_name, 'Academic Instructor'),
+        COALESCE(new.raw_user_meta_data->>'role_field', 'Academic Instructor'),
+        new.email,
+        COALESCE(new.raw_user_meta_data->>'phone', '08123456789'),
+        '',
+        TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD'),
+        COALESCE(new.raw_user_meta_data->>'salary', '₦250,000 / month'),
+        'Associate Instructor Badge',
+        '100%',
+        '100%',
+        '5.0',
+        v_bio_text
+      )
+      ON CONFLICT (email) DO UPDATE SET
+        user_id = EXCLUDED.user_id,
+        name = EXCLUDED.name,
+        role = EXCLUDED.role,
+        phone = EXCLUDED.phone,
+        salary = EXCLUDED.salary,
+        review = EXCLUDED.review;
+    EXCEPTION WHEN OTHERS THEN
+      INSERT INTO public.activity_logs (user_email, action, details)
+      VALUES (new.email, 'SIGNUP_ERROR_TEACHERS', 'Failed to auto-create staff dossier file in public.teachers query list: ' || SQLERRM);
+    END;
+  END IF;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -520,6 +622,109 @@ DROP TRIGGER IF EXISTS on_user_role_change ON public.users;
 CREATE TRIGGER on_user_role_change
   AFTER INSERT OR UPDATE OF role ON public.users
   FOR EACH ROW EXECUTE FUNCTION public.sync_user_role_to_metadata();
+
+
+-- ==========================================
+-- 4.5 RPC CONSOLE SYNC FUNCTION (sync_missing_profiles)
+-- ==========================================
+CREATE OR REPLACE FUNCTION public.sync_missing_profiles()
+RETURNS jsonb AS $$
+DECLARE
+  v_user RECORD;
+  v_count INTEGER := 0;
+  v_synced_emails TEXT[] := ARRAY[]::TEXT[];
+  v_role TEXT;
+  v_name TEXT;
+  v_teacher_id TEXT;
+  v_bio_text TEXT;
+BEGIN
+  FOR v_user IN 
+    SELECT u.id, u.email, u.raw_user_meta_data
+    FROM auth.users u
+    LEFT JOIN public.users p ON u.id = p.id
+    LEFT JOIN public.profiles pr ON u.id = pr.id
+    WHERE p.id IS NULL OR pr.id IS NULL
+  LOOP
+    v_role := COALESCE(v_user.raw_user_meta_data->>'role', 'student');
+    v_name := COALESCE(v_user.raw_user_meta_data->>'full_name', SPLIT_PART(v_user.email, '@', 1));
+    
+    -- Ensure in public.users
+    BEGIN
+      INSERT INTO public.users (id, email, full_name, role)
+      VALUES (v_user.id, v_user.email, v_name, v_role)
+      ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        role = v_role,
+        full_name = v_name;
+    EXCEPTION WHEN OTHERS THEN
+      -- Log or ignore
+    END;
+
+    -- Ensure in public.profiles
+    BEGIN
+      INSERT INTO public.profiles (id, email, full_name, role)
+      VALUES (v_user.id, v_user.email, v_name, v_role)
+      ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        role = v_role,
+        full_name = v_name;
+    EXCEPTION WHEN OTHERS THEN
+      -- Log or ignore
+    END;
+
+    -- Handle teacher roster if staff
+    IF v_role = 'staff' THEN
+      IF NOT EXISTS (SELECT 1 FROM public.teachers WHERE email = v_user.email) THEN
+        v_teacher_id := 'STF-' || FLOOR(1000 + random() * 9000)::TEXT;
+        v_bio_text := COALESCE(v_user.raw_user_meta_data->>'qualification', 'B.Ed') || ' • ' || 
+                      COALESCE(v_user.raw_user_meta_data->>'experience', '3-5 Years') || ' Experience • ' || 
+                      COALESCE(v_user.raw_user_meta_data->>'bio', 'Dedicated educational instructor.');
+
+        BEGIN
+          INSERT INTO public.teachers (
+            id, user_id, name, role, email, phone, photo_url, date_of_appointment, salary, award, punctuality_attendance, regularity_attendance, rating, review
+          )
+          VALUES (
+            v_teacher_id,
+            v_user.id,
+            COALESCE(v_name, 'Academic Instructor'),
+            COALESCE(v_user.raw_user_meta_data->>'role_field', 'Academic Instructor'),
+            v_user.email,
+            COALESCE(v_user.raw_user_meta_data->>'phone', '08123456789'),
+            '',
+            TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD'),
+            COALESCE(v_user.raw_user_meta_data->>'salary', '₦250,000 / month'),
+            'Associate Instructor Badge',
+            '100%',
+            '100%',
+            '5.0',
+            v_bio_text
+          );
+        EXCEPTION WHEN OTHERS THEN
+          -- Log or ignore
+        END;
+      END IF;
+    END IF;
+
+    -- Log this event
+    BEGIN
+      INSERT INTO public.activity_logs (user_email, action, details)
+      VALUES (v_user.email, 'PROFILE_HEAL_SYNC', 'RPC Sync: Automatically synced missing profile and metadata from auth directory.');
+    EXCEPTION WHEN OTHERS THEN
+      -- Log or ignore
+    END;
+
+    v_count := v_count + 1;
+    v_synced_emails := array_append(v_synced_emails, v_user.email);
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'synced_count', v_count,
+    'synced_emails', to_jsonb(v_synced_emails)
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
 -- ==========================================

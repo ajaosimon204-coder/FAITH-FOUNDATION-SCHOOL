@@ -9,6 +9,7 @@ import CloudLocker from './CloudLocker';
 import AttendanceTracker from '../../components/AttendanceTracker';
 import ImageUploader from '../../components/ImageUploader';
 import AcademicManager from './staff/AcademicManager';
+import ReportingDashboard from './ReportingDashboard';
 import { 
   Calendar, 
   Award, 
@@ -668,6 +669,7 @@ export default function StaffDashboard() {
         <Route path="/attendance-teacher" element={<AcademicManager initialWorkspace="attendance" />} />
         <Route path="/attendance" element={<AttendanceTracker />} />
         <Route path="/locker" element={<CloudLocker />} />
+        <Route path="/reporting" element={<ReportingDashboard />} />
       </Routes>
     </div>
   );
