@@ -101,7 +101,7 @@ export async function syncFetchStudents(): Promise<StudentRecord[]> {
   const localSaved = localStorage.getItem(localKey);
   const fallback = localSaved ? JSON.parse(localSaved) : [];
 
-  if (isSandbox() || !isSupabaseConfigured) {
+  if (!isSupabaseConfigured) {
     return fallback;
   }
 
@@ -113,8 +113,9 @@ export async function syncFetchStudents(): Promise<StudentRecord[]> {
 
     if (error) throw error;
 
+    const records: StudentRecord[] = [];
     if (data && data.length > 0) {
-      const records: StudentRecord[] = data.map(d => ({
+      records.push(...data.map(d => ({
         id: d.id,
         name: d.name,
         class: d.class,
@@ -129,12 +130,20 @@ export async function syncFetchStudents(): Promise<StudentRecord[]> {
         academicHistory: d.academic_history || [],
         communicationLogs: d.communication_logs || [],
         photoUrl: d.photo_url || ''
-      }));
-      localStorage.setItem(localKey, JSON.stringify(records));
-      return records;
-    } else {
-      return [];
+      })));
     }
+
+    // Merge with fallback browser-local records to prevent data loss or omissions
+    const mergedList = [...records];
+    fallback.forEach((f: StudentRecord) => {
+      const exists = mergedList.some(m => m.id === f.id || (m.parentEmail?.toLowerCase() === f.parentEmail?.toLowerCase() && f.parentEmail));
+      if (!exists) {
+        mergedList.push(f);
+      }
+    });
+
+    localStorage.setItem(localKey, JSON.stringify(mergedList));
+    return mergedList;
   } catch (err) {
     console.warn('Sync read students failed, using fallback:', err);
     return fallback;
@@ -250,7 +259,7 @@ export async function syncFetchStaff(): Promise<StaffRecord[]> {
   const localSaved = localStorage.getItem(localKey);
   const fallback = localSaved ? JSON.parse(localSaved) : [];
 
-  if (isSandbox() || !isSupabaseConfigured) {
+  if (!isSupabaseConfigured) {
     return fallback;
   }
 
@@ -323,8 +332,9 @@ export async function syncFetchStaff(): Promise<StaffRecord[]> {
       console.warn('Could not load rich assignments:', e);
     }
 
+    const records: StaffRecord[] = [];
     if (dbTeachers && dbTeachers.length > 0) {
-      const records: StaffRecord[] = dbTeachers.map(d => {
+      records.push(...dbTeachers.map(d => {
         const metadata = richAssignments[d.id] || { classes: [], subjects: [], classSubjectMappings: [] };
         const legacyClass = assignments[d.id] || 'None';
         let finalClasses = metadata.classes || [];
@@ -350,11 +360,20 @@ export async function syncFetchStaff(): Promise<StaffRecord[]> {
           assignedSubjects: metadata.subjects || [],
           classSubjectMappings: (metadata as any).classSubjectMappings || []
         };
-      });
-      localStorage.setItem(localKey, JSON.stringify(records));
-      return records;
+      }));
     }
-    return [];
+
+    // Merge with fallback to ensure browser-local records are not lost
+    const mergedList = [...records];
+    fallback.forEach((f: StaffRecord) => {
+      const exists = mergedList.some(m => m.id === f.id || (m.email?.toLowerCase() === f.email?.toLowerCase() && f.email));
+      if (!exists) {
+        mergedList.push(f);
+      }
+    });
+
+    localStorage.setItem(localKey, JSON.stringify(mergedList));
+    return mergedList;
   } catch (err) {
     console.warn('Sync fetch teachers failed, using fallback:', err);
     return fallback;

@@ -422,7 +422,22 @@ export default function Login() {
           });
 
           // Log straight into workspace
-          loginAsDemo(email.trim().toLowerCase(), targetRole, fullNamePlaceholder);
+          localStorage.removeItem('faith_foundation_sandbox_session');
+          if (isSupabaseConfigured) {
+            try {
+              const { error: signInError } = await supabase.auth.signInWithPassword({
+                email: email.trim().toLowerCase(),
+                password: recoveryNewPassword,
+              });
+              if (signInError) throw signInError;
+              switchRole(targetRole);
+            } catch (e) {
+              console.error('Password reset real sign-in failed, utilizing fallback session:', e);
+              loginAsDemo(email.trim().toLowerCase(), targetRole, fullNamePlaceholder);
+            }
+          } else {
+            loginAsDemo(email.trim().toLowerCase(), targetRole, fullNamePlaceholder);
+          }
           
           setError('Success! Institutional password reset in registry. Loading active administrative dashboard...');
           
@@ -456,6 +471,9 @@ export default function Login() {
       setError(`System Offline: ${configError}`);
       return;
     }
+
+    // Always clear sandbox session when performing actual live database authentication
+    localStorage.removeItem('faith_foundation_sandbox_session');
 
     setLoading(true);
     setError('');
@@ -1008,11 +1026,35 @@ export default function Login() {
 
               <button
                 type="button"
-                onClick={() => {
-                  loginAsDemo(signUpSuccessUser.email, 'staff', signUpSuccessUser.name);
-                  setSignUpSuccessUser(null);
-                  setIsSignUp(false);
-                  navigate('/dashboard');
+                onClick={async () => {
+                  if (isSupabaseConfigured) {
+                    setLoading(true);
+                    try {
+                      localStorage.removeItem('faith_foundation_sandbox_session');
+                      const { error: signInError } = await supabase.auth.signInWithPassword({
+                        email: signUpSuccessUser.email,
+                        password: password,
+                      });
+                      if (signInError) throw signInError;
+                      setSignUpSuccessUser(null);
+                      setIsSignUp(false);
+                      switchRole('staff');
+                      navigate('/dashboard');
+                    } catch (e: any) {
+                      console.error('Real login failed on confirmation redirect:', e);
+                      loginAsDemo(signUpSuccessUser.email, 'staff', signUpSuccessUser.name);
+                      setSignUpSuccessUser(null);
+                      setIsSignUp(false);
+                      navigate('/dashboard');
+                    } finally {
+                      setLoading(false);
+                    }
+                  } else {
+                    loginAsDemo(signUpSuccessUser.email, 'staff', signUpSuccessUser.name);
+                    setSignUpSuccessUser(null);
+                    setIsSignUp(false);
+                    navigate('/dashboard');
+                  }
                 }}
                 className="w-full py-4 px-6 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-lg rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2"
               >
