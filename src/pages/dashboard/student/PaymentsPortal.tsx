@@ -241,8 +241,8 @@ export default function PaymentsPortal() {
             </div>
           </div>
         ) : (
-          <div className="border border-slate-150 rounded-2xl overflow-hidden shadow-sm">
-            <table className="w-full text-left border-collapse">
+          <div className="border border-slate-150 rounded-2xl overflow-x-auto shadow-sm">
+            <table className="w-full text-left border-collapse min-w-[650px]">
               <thead>
                 <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 text-[10px] font-black uppercase tracking-wider">
                   <th className="py-4 px-5">Invoice reference</th>

@@ -1852,8 +1852,8 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
             </div>
 
             {/* Subject Input Table */}
-            <div className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm bg-white">
-              <table className="w-full text-left border-collapse text-xs">
+            <div className="border border-slate-200 rounded-3xl overflow-x-auto shadow-sm bg-white">
+              <table className="w-full text-left border-collapse text-xs min-w-[700px]">
                 <thead>
                   <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-extrabold uppercase">
                     <th className="py-3 px-4">Subject Name</th>

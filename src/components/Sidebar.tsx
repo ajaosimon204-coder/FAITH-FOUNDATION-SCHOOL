@@ -17,7 +17,8 @@ import {
   MessageSquare,
   Trophy,
   Tv,
-  Cloud
+  Cloud,
+  X
 } from 'lucide-react';
 
 function hasCompletedTermlyExam(profile: any) {
@@ -40,7 +41,7 @@ function hasCompletedTermlyExam(profile: any) {
   return false;
 }
 
-export const Sidebar = () => {
+export const Sidebar = ({ mobileOpen, setMobileOpen }: { mobileOpen?: boolean; setMobileOpen?: (open: boolean) => void }) => {
   const { profile, activeRole } = useAuth();
   const role = activeRole;
 
@@ -84,13 +85,28 @@ export const Sidebar = () => {
       : studentLinks;
 
   return (
-    <aside className="w-64 bg-primary flex flex-col p-6 text-white shrink-0 h-screen fixed left-0 top-0 overflow-y-auto hidden lg:flex">
-      <div className="mb-10 flex items-center gap-3">
-        <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center font-bold text-primary text-xl border-2 border-accent">FF</div>
-        <div>
-          <h1 className="text-sm font-bold leading-tight uppercase tracking-tight font-display">Faith Foundation</h1>
-          <p className="text-[10px] text-blue-200">Schools · ERP v1.0</p>
+    <aside className={`w-64 bg-primary flex flex-col p-6 text-white shrink-0 h-screen fixed left-0 top-0 overflow-y-auto transition-all duration-300 z-50
+      ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} lg:flex`}
+    >
+      <div className="mb-10 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center font-bold text-primary text-xl border-2 border-accent">FF</div>
+          <div>
+            <h1 className="text-sm font-bold leading-tight uppercase tracking-tight font-display">Faith Foundation</h1>
+            <p className="text-[10px] text-blue-200">Schools · ERP v1.0</p>
+          </div>
         </div>
+
+        {setMobileOpen && (
+          <button 
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="p-1.5 text-blue-200 hover:text-white lg:hidden border border-white/10 rounded-lg hover:bg-white/5 transition-all"
+            aria-label="Close sidebar"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
 
       <nav className="flex-1 space-y-1">
@@ -99,6 +115,7 @@ export const Sidebar = () => {
             key={link.to}
             to={link.to}
             end={link.to === '/dashboard'}
+            onClick={() => setMobileOpen?.(false)}
             className={({ isActive }) => `
               flex items-center gap-3 p-3 rounded-lg text-sm font-medium transition-all group
               ${isActive 

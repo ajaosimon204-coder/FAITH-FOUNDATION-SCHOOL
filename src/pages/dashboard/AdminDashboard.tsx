@@ -3399,8 +3399,8 @@ function FinanceView() {
             </div>
 
             {/* Invoices Table */}
-            <div className="border border-slate-100 rounded-xl overflow-hidden">
-              <table className="w-full text-left border-collapse text-xs">
+            <div className="border border-slate-100 rounded-xl overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs min-w-[750px]">
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 font-extrabold uppercase border-b border-slate-100 text-[10px]">
                     <th className="py-3 px-4">Ref/Student</th>

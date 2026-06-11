@@ -228,8 +228,8 @@ export default function AttendanceTrackerStudent() {
               <div className="bg-white rounded-3xl border border-slate-200 p-6 md:p-8 space-y-5 shadow-sm">
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-105 pb-3">Latest Check-In Logs & Timestamps</h3>
                 
-                <div className="border border-slate-150 rounded-2xl overflow-hidden shadow-sm">
-                  <table className="w-full text-left border-collapse">
+                <div className="border border-slate-150 rounded-2xl overflow-x-auto shadow-sm">
+                  <table className="w-full text-left border-collapse min-w-[600px]">
                     <thead>
                       <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 text-[10px] font-black uppercase tracking-wider">
                         <th className="py-4 px-5">Day / Date</th>

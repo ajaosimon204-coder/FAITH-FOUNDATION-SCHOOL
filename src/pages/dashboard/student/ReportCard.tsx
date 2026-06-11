@@ -255,8 +255,8 @@ export default function ReportCard() {
         </div>
 
         {/* Grades Table */}
-        <div className="mt-4 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-          <table className="w-full text-left border-collapse">
+        <div className="mt-4 border border-slate-200 rounded-2xl overflow-x-auto shadow-sm">
+          <table className="w-full text-left border-collapse min-w-[650px]">
             <thead>
               <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 text-[10px] font-black uppercase tracking-wider">
                 <th className="py-4 px-5">Subject Title</th>

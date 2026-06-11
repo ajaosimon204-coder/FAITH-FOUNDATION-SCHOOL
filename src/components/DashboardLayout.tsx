@@ -8,6 +8,7 @@ import { useLocation } from 'react-router-dom';
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { profile, isSandbox } = useAuth();
   const location = useLocation();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false);
 
   const getPageTitle = () => {
     const path = location.pathname;
@@ -23,18 +24,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar />
+    <div className="min-h-screen bg-gray-50 flex overflow-hidden">
+      {/* Sidebar backdrop for mobile overlay */}
+      {mobileSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden transition-all duration-200"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+
+      <Sidebar mobileOpen={mobileSidebarOpen} setMobileOpen={setMobileSidebarOpen} />
       
-      <main className="flex-1 lg:ml-64 flex flex-col overflow-hidden h-screen">
+      <main className="flex-1 lg:ml-64 flex flex-col overflow-hidden h-screen w-full">
         {/* Top Header */}
-        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-primary/5 text-primary flex items-center justify-center lg:hidden">
+        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-4 sm:px-8 shrink-0">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <button 
+              type="button"
+              onClick={() => setMobileSidebarOpen(true)}
+              className="w-10 h-10 rounded-xl bg-primary/5 text-primary flex items-center justify-center lg:hidden hover:bg-primary/10 transition-colors"
+              aria-label="Open sidebar"
+            >
                <LayoutDashboard size={20} />
-            </div>
+            </button>
             <div>
-              <h1 className="text-xl font-bold text-slate-900 font-display leading-none">{getPageTitle()}</h1>
+              <h1 className="text-lg sm:text-xl font-bold text-slate-900 font-display leading-none">{getPageTitle()}</h1>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 hidden sm:block">Faith Foundation Schools Portal</p>
             </div>
           </div>
@@ -72,7 +86,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-8 bg-[#fafafa]">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-[#fafafa]">
           {children}
         </div>
       </main>
