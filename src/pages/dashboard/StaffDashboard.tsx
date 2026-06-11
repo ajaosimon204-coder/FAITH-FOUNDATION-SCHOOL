@@ -298,19 +298,19 @@ function StaffDashboardView() {
           <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-4">LMS Management</span>
           <div className="space-y-4 flex-1 overflow-hidden">
             <div 
-              onClick={() => notifyLevel('assignment', `New Assignment: ${staffRecord?.assignedClass || 'Class'} Math`, `A new assignment has been posted. Due in 3 days.`)}
+              onClick={() => navigate('/dashboard/materials')}
               className="border-l-2 pl-3 border-secondary py-1 cursor-pointer hover:bg-slate-50 transition-colors"
             >
               <p className="text-xs font-bold text-slate-900 leading-none">Upload New Notes</p>
             </div>
             <div 
-              onClick={() => notifyLevel('assignment', 'New CBT Quiz', `${staffRecord?.assignedSubjects?.[0] || 'Subject'} CBT Quiz is now available.`)}
+              onClick={() => navigate('/dashboard/cbt')}
               className="border-l-2 pl-3 border-primary py-1 cursor-pointer hover:bg-slate-50 transition-colors"
             >
               <p className="text-xs font-bold text-slate-900 leading-none">Create CBT Quiz</p>
             </div>
             <div 
-              onClick={() => notifyLevel('grade', 'Results Released', `First term mid-term results for ${staffRecord?.assignedClass || 'Class'} are now available.`)}
+              onClick={() => navigate('/dashboard/grading')}
               className="border-l-2 pl-3 border-accent py-1 cursor-pointer hover:bg-slate-50 transition-colors"
             >
               <p className="text-xs font-bold text-slate-900 leading-none">Review Submissions</p>
@@ -667,6 +667,7 @@ export default function StaffDashboard() {
         <Route path="/grading" element={<AcademicManager initialWorkspace="report" />} />
         <Route path="/materials" element={<AcademicManager initialWorkspace="lms" />} />
         <Route path="/attendance-teacher" element={<AcademicManager initialWorkspace="attendance" />} />
+        <Route path="/cbt" element={<AcademicManager initialWorkspace="cbt" />} />
         <Route path="/attendance" element={<AttendanceTracker />} />
         <Route path="/locker" element={<CloudLocker />} />
         <Route path="/reporting" element={<ReportingDashboard />} />

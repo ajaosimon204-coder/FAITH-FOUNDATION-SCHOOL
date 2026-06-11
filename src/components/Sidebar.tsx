@@ -76,6 +76,7 @@ export const Sidebar = ({ mobileOpen, setMobileOpen }: { mobileOpen?: boolean; s
     { to: '/dashboard/reporting', icon: TrendingUp, label: 'Reporting' },
     { to: '/dashboard/grading', icon: ClipboardCheck, label: 'Grading' },
     { to: '/dashboard/materials', icon: BookOpen, label: 'Materials' },
+    { to: '/dashboard/cbt', icon: Tv, label: 'CBT Exam' },
     { to: '/dashboard/attendance-teacher', icon: Calendar, label: 'Tracking' },
     { to: '/dashboard/communications', icon: MessageSquare, label: 'Communications' },
     { to: '/dashboard/locker', icon: Cloud, label: 'Cloud Locker' },

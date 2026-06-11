@@ -119,6 +119,21 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
   const [cbtQuestions, setCbtQuestions] = useState<Question[]>([]);
   const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null);
 
+  // CBT CSV importer states
+  const [showCsvImporter, setShowCsvImporter] = useState(false);
+  const [csvFileName, setCsvFileName] = useState('');
+  const [csvParsedRows, setCsvParsedRows] = useState<string[][] | null>(null);
+  const [columnMapping, setColumnMapping] = useState<Record<string, number>>({
+    question: -1,
+    optionA: -1,
+    optionB: -1,
+    optionC: -1,
+    optionD: -1,
+    correctIndex: -1,
+    explanation: -1
+  });
+  const [csvImportMode, setCsvImportMode] = useState<'append' | 'replace'>('append');
+
   // 5. Awards states
   const [studentAchievements, setStudentAchievements] = useState<any[]>([]);
   const [leaderboardList, setLeaderboardList] = useState<any[]>([]);
@@ -1040,6 +1055,225 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
     const updated = cbtQuestions.filter(q => q.id !== id);
     setCbtQuestions(updated);
     if (editingQuestionId === id) setEditingQuestionId(null);
+  };
+
+  const parseClientCsv = (text: string): string[][] => {
+    const lines: string[][] = [];
+    let row: string[] = [];
+    let inQuotes = false;
+    let currentVal = '';
+    
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+      
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          currentVal += '"';
+          i++; // Skip next quote
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        row.push(currentVal);
+        currentVal = '';
+      } else if ((char === '\r' || char === '\n') && !inQuotes) {
+        if (char === '\r' && nextChar === '\n') {
+          i++; // Skip \n
+        }
+        row.push(currentVal);
+        if (row.length > 1 || row[0] !== '') {
+          lines.push(row);
+        }
+        row = [];
+        currentVal = '';
+      } else {
+        currentVal += char;
+      }
+    }
+    if (row.length > 0 || currentVal !== '') {
+      row.push(currentVal);
+      lines.push(row);
+    }
+    return lines;
+  };
+
+  const parseCorrectIndex = (val: string, options: string[]): number => {
+    const clean = val.trim().toUpperCase();
+    if (clean === 'A' || clean === '1') return 0;
+    if (clean === 'B' || clean === '2') return 1;
+    if (clean === 'C' || clean === '3') return 2;
+    if (clean === 'D' || clean === '4') return 3;
+    
+    // Check if it matches index directly
+    const directIdx = parseInt(clean, 10);
+    if (!isNaN(directIdx) && directIdx >= 0 && directIdx <= 3) {
+      return directIdx;
+    }
+    
+    // Check if raw text matches any option's text
+    const lowerVal = val.trim().toLowerCase();
+    for (let idx = 0; idx < options.length; idx++) {
+      if (options[idx].trim().toLowerCase() === lowerVal) {
+        return idx;
+      }
+    }
+    return 0; // Default fallback option A
+  };
+
+  const handleCsvFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvFileName(file.name);
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const csvText = event.target?.result as string;
+      if (!csvText) {
+        showSuccessBanner('The uploaded file appears to be empty.');
+        return;
+      }
+      
+      const parsed = parseClientCsv(csvText);
+      if (parsed.length === 0) {
+        showSuccessBanner('No valid lines detected in CSV.');
+        return;
+      }
+      
+      setCsvParsedRows(parsed);
+      
+      // Attempt smart auto-mapping based on column names from headers (parsed[0])
+      const headers = parsed[0] || [];
+      const mapping: Record<string, number> = {
+        question: -1,
+        optionA: -1,
+        optionB: -1,
+        optionC: -1,
+        optionD: -1,
+        correctIndex: -1,
+        explanation: -1
+      };
+      
+      headers.forEach((hdr, idx) => {
+        const clean = hdr.trim().toLowerCase();
+        if (clean.includes('question') || clean.includes('narrative') || clean.includes('text') || clean === 'q') {
+          mapping.question = idx;
+        } else if (clean.includes('option a') || clean.includes('opt a') || clean === 'a' || clean === 'optiona') {
+          mapping.optionA = idx;
+        } else if (clean.includes('option b') || clean.includes('opt b') || clean === 'b' || clean === 'optionb') {
+          mapping.optionB = idx;
+        } else if (clean.includes('option c') || clean.includes('opt c') || clean === 'c' || clean === 'optionc') {
+          mapping.optionC = idx;
+        } else if (clean.includes('option d') || clean.includes('opt d') || clean === 'd' || clean === 'optiond') {
+          mapping.optionD = idx;
+        } else if (clean.includes('correct') || clean.includes('answer') || clean.includes('key') || clean.includes('solution') || clean.includes('correctindex') || clean === 'correct option') {
+          mapping.correctIndex = idx;
+        } else if (clean.includes('explanation') || clean.includes('reason') || clean.includes('proof') || clean.includes('remark') || clean.includes('explanations')) {
+          mapping.explanation = idx;
+        }
+      });
+      
+      // If some aren't filled, try positional defaults
+      if (mapping.question === -1 && headers.length > 0) mapping.question = 0;
+      if (mapping.optionA === -1 && headers.length > 1) mapping.optionA = 1;
+      if (mapping.optionB === -1 && headers.length > 2) mapping.optionB = 2;
+      if (mapping.optionC === -1 && headers.length > 3) mapping.optionC = 3;
+      if (mapping.optionD === -1 && headers.length > 4) mapping.optionD = 4;
+      if (mapping.correctIndex === -1 && headers.length > 5) mapping.correctIndex = 5;
+      if (mapping.explanation === -1 && headers.length > 6) mapping.explanation = 6;
+      
+      setColumnMapping(mapping);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportCsvQuestions = () => {
+    if (!csvParsedRows || csvParsedRows.length < 2) {
+      showSuccessBanner('No CSV columns parsed yet.');
+      return;
+    }
+    
+    // Validate mapping
+    if (
+      columnMapping.question === -1 ||
+      columnMapping.optionA === -1 ||
+      columnMapping.optionB === -1 ||
+      columnMapping.optionC === -1 ||
+      columnMapping.optionD === -1 ||
+      columnMapping.correctIndex === -1
+    ) {
+      alert('Please map all the mandatory columns: Question text, option A, option B, option C, option D, and Correct Option index or text.');
+      return;
+    }
+    
+    const rows = csvParsedRows.slice(1); // skip headers
+    const imported: Question[] = [];
+    let startId = csvImportMode === 'replace' ? 1 : (cbtQuestions.reduce((max, q) => Math.max(max, q.id), 0) + 1);
+    
+    rows.forEach((row) => {
+      // Clean up row line
+      if (row.length === 0 || (row.length === 1 && row[0] === '')) return;
+      
+      const questionText = row[columnMapping.question] || '';
+      if (!questionText || questionText.trim() === '') return; // Skip rows without question narrative
+      
+      const optA = row[columnMapping.optionA] || '';
+      const optB = row[columnMapping.optionB] || '';
+      const optC = row[columnMapping.optionC] || '';
+      const optD = row[columnMapping.optionD] || '';
+      const options = [optA, optB, optC, optD].map(o => o.trim() || 'Option Text');
+      
+      const correctVal = row[columnMapping.correctIndex] || '';
+      const correctIndex = parseCorrectIndex(correctVal, options);
+      
+      const explanationText = columnMapping.explanation !== -1 ? (row[columnMapping.explanation] || '') : '';
+      
+      imported.push({
+        id: startId++,
+        question: questionText.trim(),
+        options,
+        correctIndex,
+        explanation: explanationText.trim() || `Automated feedback proof for ${cbtSubject}`
+      });
+    });
+    
+    if (imported.length === 0) {
+      showSuccessBanner('No valid questions found to import.');
+      return;
+    }
+    
+    if (csvImportMode === 'replace') {
+      setCbtQuestions(imported);
+    } else {
+      setCbtQuestions([...cbtQuestions, ...imported]);
+    }
+    
+    showSuccessBanner(`Successfully parsed & imported ${imported.length} questions into the review queue. Remember to click 'Commit Exam Questionnaire Pool' below to save.`);
+    logAudit('CBT CSV Import', `Parsed and mapped ${imported.length} questions into pending state for ${cbtSubject} (${cbtClass})`);
+    
+    // Reset states
+    setCsvParsedRows(null);
+    setCsvFileName('');
+    setShowCsvImporter(false);
+  };
+
+  const downloadCsvTemplate = () => {
+    const rowsList = [
+      ["Question", "Option A", "Option B", "Option C", "Option D", "Correct Option", "Explanation"],
+      ["Which component is responsible for storing persistent user records?", "Durable Cloud Database - Firestore", "Active Redux Global State Store", "Transient react state reference hook", "Nginx Reverse Proxy configuration level", "A", "Firestore database handles persistent data, while local scopes handle transient UI states."],
+      ["What grade is automatically given for a termly total assessment score of 85%?", "Grade B2", "Grade A1 Distinction", "Grade C4 Credit Pass", "Grade F9 Failure", "B", "In FAWAEC scale, direct scores >= 80 represent A1 Excellence."]
+    ];
+    
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + rowsList.map(e => e.map(val => `"${val.replace(/"/g, '""')}"`).join(",")).join("\n");
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "faith_academy_cbt_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
 
@@ -2855,16 +3089,210 @@ export default function AcademicManager({ initialWorkspace }: { initialWorkspace
 
             {/* Questions Pool Manager */}
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="font-extrabold text-[10px] uppercase text-slate-400 tracking-wider">Configure pool: {cbtQuestions.length} Active Drills</span>
-                <button
-                  type="button"
-                  onClick={addEmptyQuestion}
-                  className="bg-secondary text-white font-bold uppercase py-2 px-4 rounded-xl flex items-center gap-1.5 hover:bg-opacity-95 text-[10px]"
-                >
-                  <Plus size={14} /> Insert New Question
-                </button>
+              <div className="flex justify-between items-center bg-white p-4 rounded-xl border">
+                <span className="font-extrabold text-[10px] uppercase text-slate-500 tracking-wider">Configure pool: {cbtQuestions.length} Active Drills</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCsvImporter(!showCsvImporter)}
+                    className="bg-indigo-600 text-white font-bold uppercase py-2.5 px-4 rounded-xl flex items-center gap-1.5 hover:bg-opacity-95 text-[10px]"
+                  >
+                    <UploadCloud size={14} /> Batch CSV Question Builder
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addEmptyQuestion}
+                    className="bg-secondary text-white font-bold uppercase py-2.5 px-4 rounded-xl flex items-center gap-1.5 hover:bg-opacity-95 text-[10px]"
+                  >
+                    <Plus size={14} /> Insert New Question
+                  </button>
+                </div>
               </div>
+
+              {/* CSV Import Tool Panel */}
+              {showCsvImporter && (
+                <div className="bg-white rounded-2xl border-2 border-indigo-100 p-6 space-y-6 shadow-md transition-all">
+                  <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+                    <div className="space-y-1">
+                      <h5 className="text-xs font-extrabold uppercase tracking-widest text-[#4f46e5] flex items-center gap-1.5">
+                        <UploadCloud size={14} className="animate-bounce" />
+                        Batch CSV Questions Importer
+                      </h5>
+                      <p className="text-[10px] text-slate-500">Accelerate CBT exam preparation by uploading a spreadsheet file of assessment questions.</p>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={downloadCsvTemplate}
+                      className="p-1.5 text-[9px] font-bold bg-indigo-50 text-[#4f46e5] border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all flex items-center gap-1"
+                    >
+                      <span>Download Template CSV</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* File Upload Stage */}
+                    <div className="space-y-3">
+                      <label className="block text-[9px] font-black uppercase text-slate-400 tracking-wider">Select spreadsheet file (.csv)</label>
+                      <div className="border-2 border-dashed border-slate-200 hover:border-[#4f46e5] rounded-xl p-6 text-center cursor-pointer transition-all relative bg-slate-50/50">
+                        <input 
+                          id="staff_cbt_csv_file_upload"
+                          type="file" 
+                          accept=".csv" 
+                          onChange={handleCsvFileUpload}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                        />
+                        <div className="space-y-2 pointer-events-none">
+                          <UploadCloud size={28} className="mx-auto text-slate-400" />
+                          <div className="text-xs font-bold text-slate-700">
+                            {csvFileName ? (
+                              <span className="text-emerald-650 font-black">{csvFileName}</span>
+                            ) : (
+                              <span>Choose CSV file or drag here</span>
+                            )}
+                          </div>
+                          <p className="text-[9px] text-slate-400">File structure must use standard separator columns.</p>
+                        </div>
+                      </div>
+
+                      {csvParsedRows && (
+                        <div className="bg-slate-50 border p-3 rounded-xl space-y-2">
+                          <h6 className="text-[9px] uppercase font-black text-slate-450">Import Mode Options</h6>
+                          <div className="flex gap-4">
+                            <label className="flex items-center gap-1.5 font-bold text-slate-700 cursor-pointer">
+                              <input 
+                                type="radio" 
+                                name="csv_mode" 
+                                checked={csvImportMode === 'append'} 
+                                onChange={() => setCsvImportMode('append')} 
+                              />
+                              <span>Append ({cbtQuestions.length} Qs)</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 font-bold text-slate-700 cursor-pointer">
+                              <input 
+                                type="radio" 
+                                name="csv_mode" 
+                                checked={csvImportMode === 'replace'} 
+                                onChange={() => setCsvImportMode('replace')} 
+                              />
+                              <span className="text-rose-600">Replace current pool</span>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Column Mapping Configuration Stage */}
+                    <div className="space-y-4">
+                      <h6 className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Alignment Mapping Table</h6>
+                      
+                      {!csvParsedRows ? (
+                        <div className="h-40 border border-slate-100 rounded-xl bg-slate-50 flex items-center justify-center text-center p-4">
+                          <p className="text-[11px] text-slate-400 italic">Upload a CSV file to customize column alignments.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                          <p className="text-[10px] text-slate-455 leading-relaxed font-semibold">
+                            Map the target database fields on the left to your uploaded spreadsheet's column header on the right.
+                          </p>
+                          
+                          <div className="space-y-2 border-t pt-2">
+                            {[
+                              { key: 'question', label: '1. Question Narrative *', desc: 'Main question statement' },
+                              { key: 'optionA', label: '2. Option A Label *', desc: 'First choice value' },
+                              { key: 'optionB', label: '3. Option B Label *', desc: 'Second choice value' },
+                              { key: 'optionC', label: '4. Option C Label *', desc: 'Third choice value' },
+                              { key: 'optionD', label: '5. Option D Label *', desc: 'Fourth choice value' },
+                              { key: 'correctIndex', label: '6. Correct Option Index *', desc: 'Indicates the answer (Letter, Number, or text)' },
+                              { key: 'explanation', label: '7. Step-by-Step Explanation', desc: 'Rationale feedback narrative' },
+                            ].map((field) => (
+                              <div key={field.key} className="flex items-center justify-between gap-4 border-b pb-1.5 last:border-b-0">
+                                <div className="space-y-0.5">
+                                  <span className="text-[10.5px] font-black text-slate-750 block leading-tight">{field.label}</span>
+                                  <span className="text-[9px] text-slate-400 block">{field.desc}</span>
+                                </div>
+                                <select
+                                  value={columnMapping[field.key] ?? -1}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    setColumnMapping(prev => ({ ...prev, [field.key]: val }));
+                                  }}
+                                  className="bg-white border rounded p-1 text-[10px] font-extrabold text-[#4f46e5] outline-none max-w-[160px]"
+                                >
+                                  <option value={-1}>-- Unmapped / Skipped --</option>
+                                  {(csvParsedRows[0] || []).map((hdr, hIdx) => (
+                                    <option key={hIdx} value={hIdx}>Col {hIdx + 1}: "{hdr || '(Empty Header)'}"</option>
+                                  ))}
+                                </select>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Import Preview Frame */}
+                  {csvParsedRows && csvParsedRows.length > 1 && (
+                    <div className="bg-slate-50 p-4 rounded-xl border space-y-2">
+                      <h6 className="text-[9px] uppercase font-black text-[#4f46e5] tracking-widest font-mono">Mapped preview (First Row)</h6>
+                      {(() => {
+                        const firstRow = csvParsedRows[1];
+                        const qText = columnMapping.question !== -1 ? (firstRow[columnMapping.question] || '') : '';
+                        const optA = columnMapping.optionA !== -1 ? (firstRow[columnMapping.optionA] || '') : 'Option A fallback';
+                        const optB = columnMapping.optionB !== -1 ? (firstRow[columnMapping.optionB] || '') : 'Option B fallback';
+                        const optC = columnMapping.optionC !== -1 ? (firstRow[columnMapping.optionC] || '') : 'Option C fallback';
+                        const optD = columnMapping.optionD !== -1 ? (firstRow[columnMapping.optionD] || '') : 'Option D fallback';
+                        const correctVal = columnMapping.correctIndex !== -1 ? (firstRow[columnMapping.correctIndex] || '') : '';
+                        const opts = [optA, optB, optC, optD];
+                        const cIdx = parseCorrectIndex(correctVal, opts);
+                        
+                        return (
+                          <div className="bg-white p-3.5 rounded-lg border space-y-2.5 text-xs font-bold text-slate-700">
+                            <p className="text-slate-900 font-extrabold text-xs">Q: {qText || <span className="text-rose-500 italic">No Question column mapped correctly</span>}</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {opts.map((opt, oIdx) => (
+                                <div key={oIdx} className={`p-2 border rounded-lg text-[11px] ${oIdx === cIdx ? 'bg-green-50 border-green-300 text-green-700 font-black' : 'bg-slate-50/50'}`}>
+                                  {String.fromCharCode(65 + oIdx)}. {opt}
+                                </div>
+                              ))}
+                            </div>
+                            {columnMapping.explanation !== -1 && firstRow[columnMapping.explanation] && (
+                              <p className="text-[10px] text-slate-400 font-medium italic">Explanation: "{firstRow[columnMapping.explanation]}"</p>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Action panel footer */}
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCsvParsedRows(null);
+                        setCsvFileName('');
+                        setShowCsvImporter(false);
+                      }}
+                      className="bg-white border rounded-xl py-2 px-4 text-[10px] font-black uppercase text-slate-650 hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!csvParsedRows}
+                      onClick={handleImportCsvQuestions}
+                      className={`font-black uppercase py-2 px-5 rounded-xl text-[10px] flex items-center gap-1.5 ${
+                        csvParsedRows 
+                          ? 'bg-[#4f46e5] text-white hover:bg-opacity-95' 
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <CheckCircle size={14} /> Map & Import Questions
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-4">
                 {cbtQuestions.map((q, index) => {
